@@ -113,7 +113,10 @@ def _load_delimited_text(path: Path, default_delimiter: str | None) -> Ingestion
 
 
 def _load_excel(path: Path) -> IngestionResult:
-    workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    try:
+        workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    except Exception as exc:
+        raise IngestionError(f"Could not open Excel file: {exc}") from exc
     visible_sheets = [ws.title for ws in workbook.worksheets if ws.sheet_state == "visible"]
     workbook.close()
 
@@ -187,12 +190,18 @@ def _load_json(path: Path) -> IngestionResult:
 
 
 def _load_parquet(path: Path) -> IngestionResult:
-    df = pd.read_parquet(path, engine="pyarrow")
+    try:
+        df = pd.read_parquet(path, engine="pyarrow")
+    except Exception as exc:
+        raise IngestionError(f"Could not parse Parquet file: {exc}") from exc
     return IngestionResult(dataframe=df, detected_format="parquet")
 
 
 def _load_feather(path: Path) -> IngestionResult:
-    df = pd.read_feather(path)
+    try:
+        df = pd.read_feather(path)
+    except Exception as exc:
+        raise IngestionError(f"Could not parse Feather file: {exc}") from exc
     return IngestionResult(dataframe=df, detected_format="feather")
 
 

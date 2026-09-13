@@ -109,8 +109,17 @@ for the mandated PLAN → IMPLEMENT → TEST → VERIFY workflow).
 - [x] Phase 16 — Power BI Validation
 - [x] Phase 17 — Data Dictionary & Summaries (Quality Score, Before/After)
 - [x] Phase 18 — PDF Reporting (`DataQX_Report.pdf`)
-- [x] **Phase 19 — Dashboard Integration**: Upload + Dashboard pages wired to real
-      backend results, no hardcoded metrics. *(current)*
-- [ ] Phase 20+ — remaining sidebar pages (Data Quality, Cleaning Actions, Lineage,
-      Drift, Power BI Readiness, Data Dictionary, Reports & Downloads UI), performance,
-      security hardening, full test/regression pass (see `DATAQX.pdf` §65)
+- [x] Phase 19 — Dashboard Integration: Upload + Dashboard pages wired to real
+      backend results, no hardcoded metrics.
+- [x] Phase 20 — Lineage / Drift / Power BI UI: before/after, data dictionary, and
+      download endpoints wired to the remaining sidebar pages.
+- [x] Phase 21 — Performance: performance logging (`performance_log.csv`), pipeline
+      result caching, processing-time surfaced in the frontend.
+- [x] **Phase 22 — Security & Error Handling**: friendly `IngestionError` reasons for
+      corrupt Excel/Parquet/Feather files, a global unhandled-exception safety net
+      (`main.py`) that guarantees no raw stack trace ever reaches a client, basic
+      hardening response headers, and a dedicated `test_security.py` /
+      `test_malformed_inputs.py` suite covering path traversal, unsafe filenames,
+      extension spoofing, and corrupt/malformed dataset files. *(current)*
+- [ ] Phase 23 — Full Testing (unit/integration/frontend/E2E/regression/performance)
+- [ ] Phase 24 — Final End-to-End Validation (see `DATAQX.pdf` §65)

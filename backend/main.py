@@ -4,8 +4,11 @@ Stateless, file-based backend. No database, no ORM, no persistent server-side se
 state. Run `uvicorn main:app --reload` from the backend/ directory to start it locally.
 """
 
-from fastapi import FastAPI
+import logging
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.analyze import router as analyze_router
 from app.api.before_after import router as before_after_router
@@ -27,6 +30,7 @@ from app.core.logging import setup_logging
 from app.utils.filesystem import ensure_directories
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 setup_logging()
 ensure_directories()
@@ -40,6 +44,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Basic hardening headers on every response (DATAQX.pdf S55)."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    return response
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Last-resort safety net: never let a raw stack trace reach the client.
+
+    Individual routers already catch and translate expected failures; this exists
+    only to guarantee the same friendly-response guarantee for anything they miss.
+    """
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "An unexpected error occurred."})
 
 app.include_router(health_router, prefix="/api")
 app.include_router(upload_router, prefix="/api")
