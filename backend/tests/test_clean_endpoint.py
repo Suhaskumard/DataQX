@@ -58,6 +58,11 @@ def test_clean_endpoint_produces_correct_output_and_preserves_raw():
     metadata = json.loads((settings.runs_dir / run_id / "run_metadata.json").read_text(encoding="utf-8"))
     assert metadata["status"] == "cleaned"
 
+    # Phase 14: output_hash recorded for a published file, matching the real cleaned CSV.
+    expected_output_hash = hashlib.sha256(csv_path.read_bytes()).hexdigest()
+    assert metadata["files"]["data.csv"]["output_hash"] == expected_output_hash
+    assert metadata["processing_time_seconds"]["clean"] > 0
+
     # Per-run CSV cleaning log (S34's run-directory example).
     run_csv_path = settings.runs_dir / run_id / "cleaning_log.csv"
     assert run_csv_path.exists()
@@ -129,6 +134,8 @@ def test_clean_endpoint_rolls_back_for_unresolved_duplicate_id():
 
     metadata = json.loads((settings.runs_dir / run_id / "run_metadata.json").read_text(encoding="utf-8"))
     assert metadata["status"] == "rollback"
+    # Phase 14: a rolled-back file never gets an output_hash -- nothing was published.
+    assert metadata["files"]["dupid.csv"]["output_hash"] is None
 
 
 def test_clean_endpoint_still_publishes_normal_data_after_gate_added():

@@ -154,6 +154,14 @@ def test_run_metadata_written():
     assert metadata["status"] == "uploaded"
     assert "timestamp" in metadata
 
+    # Phase 14: consolidated fields.
+    expected_hash = hashlib.sha256(content).hexdigest()
+    assert metadata["files"]["data.csv"]["input_hash"] == expected_hash
+    assert metadata["files"]["data.csv"]["output_hash"] is None
+    assert metadata["quality_score"] is None  # never fabricated (S63)
+    assert metadata["powerbi_readiness"] is None
+    assert metadata["processing_time_seconds"]["upload"] > 0
+
 
 def test_same_filename_across_runs_never_collides():
     content_a = b"version,1\n"

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
@@ -19,6 +20,7 @@ from app.services.cleaning import apply_cleaning
 from app.services.ingestion import IngestionError, load_dataset
 from app.services.issue_detection import detect_issues
 from app.services.profiling import profile_dataset
+from app.services.run_metadata import record_processing_time, update_run_metadata
 from app.services.validation import validate_dataset
 from app.utils.filesystem import get_run_dir, safe_join
 
@@ -32,6 +34,7 @@ class ValidateRequest(BaseModel):
 
 @router.post("/validate")
 def validate_run(request: ValidateRequest) -> dict:
+    start_time = time.perf_counter()
     settings = get_settings()
     try:
         input_dir = safe_join(settings.input_dir, request.run_id)
@@ -75,10 +78,7 @@ def validate_run(request: ValidateRequest) -> dict:
         json.dumps(result, indent=2, default=str), encoding="utf-8"
     )
 
-    metadata_path = run_dir / "run_metadata.json"
-    if metadata_path.exists():
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        metadata["status"] = "validated"
-        metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    update_run_metadata(run_dir, status="validated")
+    record_processing_time(run_dir, "validate", time.perf_counter() - start_time)
 
     return result

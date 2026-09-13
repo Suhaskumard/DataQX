@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
@@ -19,6 +20,7 @@ from app.services.ingestion import IngestionError, load_dataset
 from app.services.issue_detection import detect_issues
 from app.services.profiling import profile_dataset
 from app.services.project_plan import check_required_columns, load_project_plan
+from app.services.run_metadata import record_processing_time, update_run_metadata
 from app.utils.filesystem import get_run_dir, safe_join
 
 router = APIRouter()
@@ -31,6 +33,7 @@ class AnalyzeRequest(BaseModel):
 
 @router.post("/analyze")
 def analyze_run(request: AnalyzeRequest) -> dict:
+    start_time = time.perf_counter()
     settings = get_settings()
     try:
         input_dir = safe_join(settings.input_dir, request.run_id)
@@ -88,11 +91,8 @@ def analyze_run(request: AnalyzeRequest) -> dict:
     }
     (run_dir / "issues.json").write_text(json.dumps(issues_result, indent=2, default=str), encoding="utf-8")
 
-    metadata_path = run_dir / "run_metadata.json"
-    if metadata_path.exists():
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        metadata["status"] = "profiled"
-        metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    update_run_metadata(run_dir, status="profiled")
+    record_processing_time(run_dir, "analyze", time.perf_counter() - start_time)
 
     return result
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from datetime import datetime, timezone
 
 import pandas as pd
@@ -23,6 +24,7 @@ from app.services.lineage import build_lineage
 from app.services.profiling import profile_dataset
 from app.services.project_plan import load_project_plan
 from app.services.rollback import evaluate_gate
+from app.services.run_metadata import compute_file_hash, record_processing_time, update_run_metadata
 from app.utils.filesystem import get_run_dir, safe_join
 
 router = APIRouter()
@@ -35,6 +37,7 @@ class CleanRequest(BaseModel):
 
 @router.post("/clean")
 def clean_run(request: CleanRequest) -> dict:
+    start_time = time.perf_counter()
     settings = get_settings()
     try:
         input_dir = safe_join(settings.input_dir, request.run_id)
@@ -61,6 +64,7 @@ def clean_run(request: CleanRequest) -> dict:
     file_lineage: dict[str, list[dict]] = {}
     all_lineage_rows: list[dict] = []
     rollback_reports: dict[str, dict] = {}
+    metadata_files: dict[str, dict] = {}
     any_rolled_back = False
     for file_path in raw_files:
         try:
@@ -90,6 +94,7 @@ def clean_run(request: CleanRequest) -> dict:
             if not gate.published:
                 any_rolled_back = True
                 rollback_reports[file_path.name] = gate.to_dict()
+                metadata_files[file_path.name] = {"output_hash": None, "status": "rollback"}
                 file_results[file_path.name] = {
                     "status": "rolled_back",
                     "reason": gate.reason,
@@ -102,6 +107,8 @@ def clean_run(request: CleanRequest) -> dict:
             xlsx_path = safe_join(output_dir, f"{stem}_cleaned.xlsx")
             cleaning_result.cleaned_df.to_csv(csv_path, index=False)
             cleaning_result.cleaned_df.to_excel(xlsx_path, index=False)
+
+            metadata_files[file_path.name] = {"output_hash": compute_file_hash(csv_path), "status": "cleaned"}
 
             file_results[file_path.name] = {
                 "status": "cleaned",
@@ -155,10 +162,11 @@ def clean_run(request: CleanRequest) -> dict:
             json.dumps(rollback_result, indent=2, default=str), encoding="utf-8"
         )
 
-    metadata_path = run_dir / "run_metadata.json"
-    if metadata_path.exists():
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        metadata["status"] = "rollback" if any_rolled_back else "cleaned"
-        metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    update_run_metadata(
+        run_dir,
+        status="rollback" if any_rolled_back else "cleaned",
+        files=metadata_files,
+    )
+    record_processing_time(run_dir, "clean", time.perf_counter() - start_time)
 
     return result
