@@ -13,6 +13,7 @@ from app.api.drift import router as drift_router
 from app.api.health import router as health_router
 from app.api.issues import router as issues_router
 from app.api.lineage import router as lineage_router
+from app.api.powerbi import router as powerbi_router
 from app.api.upload import router as upload_router
 from app.api.validate import router as validate_router
 from app.core.config import get_settings
@@ -41,6 +42,7 @@ app.include_router(issues_router, prefix="/api")
 app.include_router(clean_router, prefix="/api")
 app.include_router(drift_router, prefix="/api")
 app.include_router(lineage_router, prefix="/api")
+app.include_router(powerbi_router, prefix="/api")
 app.include_router(validate_router, prefix="/api")
 
 

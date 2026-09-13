@@ -20,6 +20,7 @@ from app.services.confidence import classify_issue
 from app.services.drift import detect_drift, find_previous_profile, save_profile_snapshot
 from app.services.ingestion import IngestionError, load_dataset
 from app.services.issue_detection import detect_issues
+from app.services.powerbi import PowerBICheck, assess_relationships, assess_single_file_readiness, compute_score
 from app.services.profiling import profile_dataset
 from app.services.project_plan import check_required_columns, load_project_plan
 from app.services.run_metadata import record_processing_time, update_run_metadata
@@ -55,7 +56,9 @@ def analyze_run(request: AnalyzeRequest) -> dict:
     file_profiles: dict[str, dict] = {}
     file_issues: dict[str, list] = {}
     file_drift: dict[str, dict] = {}
+    file_powerbi: dict[str, dict] = {}
     all_drift_rows: list[dict] = []
+    successful_files: dict[str, tuple] = {}
     for file_path in raw_files:
         try:
             ingestion_result = load_dataset(file_path)
@@ -95,6 +98,10 @@ def analyze_run(request: AnalyzeRequest) -> dict:
             )
 
             save_profile_snapshot(settings.history_dir, file_path.name, request.run_id, profile)
+
+            powerbi_report = assess_single_file_readiness(ingestion_result.dataframe, profile, issues)
+            file_powerbi[file_path.name] = powerbi_report.to_dict()
+            successful_files[file_path.name] = (ingestion_result.dataframe, profile)
         except IngestionError as exc:
             file_profiles[file_path.name] = {"status": "failed", "reason": exc.reason}
         except Exception:
@@ -131,7 +138,29 @@ def analyze_run(request: AnalyzeRequest) -> dict:
             columns=["run_id", "dataset", "overall_status", "compared_against", "finding_count"],
         )
 
-    update_run_metadata(run_dir, status="profiled")
+    if successful_files:
+        relationship_checks = assess_relationships(successful_files)
+        for filename, check in relationship_checks.items():
+            file_powerbi[filename]["checks"].append(check.to_dict())
+            file_powerbi[filename]["score"] = compute_score(
+                [PowerBICheck(**c) for c in file_powerbi[filename]["checks"]]
+            )
+
+    powerbi_result = {
+        "run_id": request.run_id,
+        "timestamp": timestamp,
+        "files": file_powerbi,
+    }
+    (run_dir / "powerbi_readiness.json").write_text(
+        json.dumps(powerbi_result, indent=2, default=str), encoding="utf-8"
+    )
+
+    overall_powerbi_score = (
+        round(sum(f["score"] for f in file_powerbi.values()) / len(file_powerbi))
+        if file_powerbi else None
+    )
+
+    update_run_metadata(run_dir, status="profiled", powerbi_readiness=overall_powerbi_score)
     record_processing_time(run_dir, "analyze", time.perf_counter() - start_time)
 
     return result
