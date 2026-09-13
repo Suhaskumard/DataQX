@@ -19,6 +19,7 @@ from app.services.audit_logging import append_rows_to_csv, build_log_rows
 from app.services.cleaning import apply_cleaning
 from app.services.ingestion import IngestionError, load_dataset
 from app.services.issue_detection import detect_issues
+from app.services.lineage import build_lineage
 from app.services.profiling import profile_dataset
 from app.utils.filesystem import get_run_dir, safe_join
 
@@ -51,6 +52,8 @@ def clean_run(request: CleanRequest) -> dict:
     file_results: dict[str, dict] = {}
     all_audit_rows: list[dict] = []
     all_cleaning_rows: list[dict] = []
+    file_lineage: dict[str, list[dict]] = {}
+    all_lineage_rows: list[dict] = []
     for file_path in raw_files:
         try:
             ingestion_result = load_dataset(file_path)
@@ -69,6 +72,16 @@ def clean_run(request: CleanRequest) -> dict:
             )
             all_audit_rows.extend(audit_rows)
             all_cleaning_rows.extend(cleaning_rows)
+
+            lineage_entries = build_lineage(
+                file_path.name,
+                list(ingestion_result.dataframe.columns),
+                list(cleaning_result.cleaned_df.columns),
+                cleaning_result.log,
+            )
+            lineage_dicts = [entry.to_dict() for entry in lineage_entries]
+            file_lineage[file_path.name] = lineage_dicts
+            all_lineage_rows.extend(lineage_dicts)
 
             file_results[file_path.name] = {
                 "status": "cleaned",
@@ -100,6 +113,17 @@ def clean_run(request: CleanRequest) -> dict:
 
     append_rows_to_csv(settings.logs_dir / "audit_log.csv", all_audit_rows)
     append_rows_to_csv(settings.logs_dir / "cleaning_log.csv", all_cleaning_rows)
+
+    lineage_result = {
+        "run_id": request.run_id,
+        "timestamp": result["timestamp"],
+        "files": file_lineage,
+    }
+    (run_dir / "data_lineage.json").write_text(
+        json.dumps(lineage_result, indent=2, default=str), encoding="utf-8"
+    )
+    if all_lineage_rows:
+        pd.DataFrame(all_lineage_rows).to_csv(run_dir / "data_lineage.csv", index=False)
 
     metadata_path = run_dir / "run_metadata.json"
     if metadata_path.exists():

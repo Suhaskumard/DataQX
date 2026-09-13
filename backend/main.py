@@ -11,6 +11,7 @@ from app.api.analyze import router as analyze_router
 from app.api.clean import router as clean_router
 from app.api.health import router as health_router
 from app.api.issues import router as issues_router
+from app.api.lineage import router as lineage_router
 from app.api.upload import router as upload_router
 from app.core.config import get_settings
 from app.core.logging import setup_logging
@@ -36,6 +37,7 @@ app.include_router(upload_router, prefix="/api")
 app.include_router(analyze_router, prefix="/api")
 app.include_router(issues_router, prefix="/api")
 app.include_router(clean_router, prefix="/api")
+app.include_router(lineage_router, prefix="/api")
 
 
 @app.get("/health")
