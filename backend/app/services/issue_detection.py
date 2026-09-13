@@ -163,6 +163,26 @@ def _detect_category_inconsistencies(profile: DatasetProfile) -> list[Issue]:
     return issues
 
 
+def _detect_whitespace_formatting(profile: DatasetProfile) -> list[Issue]:
+    issues = []
+    for col_profile in profile.columns:
+        extra = col_profile.text_extra
+        if not extra:
+            continue
+        count = extra.get("whitespace_issue_count", 0)
+        if count > 0:
+            issues.append(
+                Issue(
+                    issue_type="whitespace_formatting",
+                    column=col_profile.original_name,
+                    severity="low",
+                    affected_count=count,
+                    description=f"Column '{col_profile.original_name}' has {count} value(s) with leading/trailing/multiple internal spaces.",
+                )
+            )
+    return issues
+
+
 def _detect_date_issues(df: pd.DataFrame, profile: DatasetProfile) -> list[Issue]:
     issues = []
     for col_profile in profile.columns:
@@ -353,6 +373,7 @@ def detect_issues(df: pd.DataFrame, profile: DatasetProfile) -> list[Issue]:
     issues += _detect_duplicates(df, profile)
     issues += _detect_mixed_types(df, profile)
     issues += _detect_category_inconsistencies(profile)
+    issues += _detect_whitespace_formatting(profile)
     issues += _detect_date_issues(df, profile)
     issues += _detect_impossible_values(df)
     issues += _detect_outliers(profile)

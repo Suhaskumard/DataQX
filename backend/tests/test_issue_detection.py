@@ -180,6 +180,29 @@ def test_high_cardinality_column_detected():
     assert matches[0].column == "comments"
 
 
+def test_whitespace_formatting_detected():
+    values = [f"free text value {i}" for i in range(19)] + ["  extra spaces  "]
+    df = pd.DataFrame({"notes": values})
+    profile = profile_dataset(df)
+    col = next(c for c in profile.columns if c.original_name == "notes")
+    assert col.inferred_type == "string"
+
+    issues = detect_issues(df, profile)
+    matches = _issues_of_type(issues, "whitespace_formatting")
+    assert len(matches) == 1
+    assert matches[0].column == "notes"
+    assert matches[0].affected_count == 1
+
+
+def test_whitespace_formatting_absent_when_clean():
+    values = [f"free text value {i}" for i in range(20)]
+    df = pd.DataFrame({"notes": values})
+    profile = profile_dataset(df)
+
+    issues = detect_issues(df, profile)
+    assert _issues_of_type(issues, "whitespace_formatting") == []
+
+
 def test_clean_dataset_produces_no_issues():
     df = pd.DataFrame(
         {

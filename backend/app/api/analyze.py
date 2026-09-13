@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.core.config import get_settings
+from app.services.confidence import classify_issue
 from app.services.ingestion import IngestionError, load_dataset
 from app.services.issue_detection import detect_issues
 from app.services.profiling import profile_dataset
@@ -49,14 +50,17 @@ def analyze_run(request: AnalyzeRequest) -> dict:
             ingestion_result = load_dataset(file_path)
             profile = profile_dataset(ingestion_result.dataframe, source_path=file_path)
             issues = detect_issues(ingestion_result.dataframe, profile)
+            issues_with_confidence = [
+                {**issue.to_dict(), "confidence": classify_issue(issue).to_dict()} for issue in issues
+            ]
             file_profiles[file_path.name] = {
                 "status": "profiled",
                 "detected_format": ingestion_result.detected_format,
                 "ingestion_warnings": ingestion_result.warnings,
                 "profile": profile.to_dict(),
-                "issues": [issue.to_dict() for issue in issues],
+                "issues": issues_with_confidence,
             }
-            file_issues[file_path.name] = [issue.to_dict() for issue in issues]
+            file_issues[file_path.name] = issues_with_confidence
         except IngestionError as exc:
             file_profiles[file_path.name] = {"status": "failed", "reason": exc.reason}
         except Exception:

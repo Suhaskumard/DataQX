@@ -23,8 +23,14 @@ def test_issues_endpoint_returns_detected_issues():
     body = issues_response.json()
     assert body["run_id"] == run_id
 
-    issue_types = {issue["issue_type"] for issue in body["files"]["data.csv"]}
+    file_issues = body["files"]["data.csv"]
+    issue_types = {issue["issue_type"] for issue in file_issues}
     assert "missing_value_placeholder" in issue_types
+
+    placeholder_issue = next(i for i in file_issues if i["issue_type"] == "missing_value_placeholder")
+    assert placeholder_issue["confidence"]["confidence"] == "MEDIUM"
+    assert placeholder_issue["confidence"]["rule"] == "missing_value_placeholder"
+    assert placeholder_issue["confidence"]["evidence"]["column"] == "status"
 
 
 def test_issues_endpoint_404_before_analyze():
