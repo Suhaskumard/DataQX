@@ -21,6 +21,7 @@ from app.services.ingestion import IngestionError, load_dataset
 from app.services.issue_detection import detect_issues
 from app.services.lineage import build_lineage
 from app.services.profiling import profile_dataset
+from app.services.rollback import evaluate_gate
 from app.utils.filesystem import get_run_dir, safe_join
 
 router = APIRouter()
@@ -54,18 +55,14 @@ def clean_run(request: CleanRequest) -> dict:
     all_cleaning_rows: list[dict] = []
     file_lineage: dict[str, list[dict]] = {}
     all_lineage_rows: list[dict] = []
+    rollback_reports: dict[str, dict] = {}
+    any_rolled_back = False
     for file_path in raw_files:
         try:
             ingestion_result = load_dataset(file_path)
             profile = profile_dataset(ingestion_result.dataframe, source_path=file_path)
             issues = detect_issues(ingestion_result.dataframe, profile)
             cleaning_result = apply_cleaning(ingestion_result.dataframe, issues)
-
-            stem = file_path.stem
-            csv_path = safe_join(output_dir, f"{stem}_cleaned.csv")
-            xlsx_path = safe_join(output_dir, f"{stem}_cleaned.xlsx")
-            cleaning_result.cleaned_df.to_csv(csv_path, index=False)
-            cleaning_result.cleaned_df.to_excel(xlsx_path, index=False)
 
             audit_rows, cleaning_rows = build_log_rows(
                 request.run_id, file_path.name, issues, cleaning_result.log
@@ -83,6 +80,24 @@ def clean_run(request: CleanRequest) -> dict:
             file_lineage[file_path.name] = lineage_dicts
             all_lineage_rows.extend(lineage_dicts)
 
+            gate = evaluate_gate(cleaning_result.cleaned_df)
+
+            if not gate.published:
+                any_rolled_back = True
+                rollback_reports[file_path.name] = gate.to_dict()
+                file_results[file_path.name] = {
+                    "status": "rolled_back",
+                    "reason": gate.reason,
+                    "validation_report": gate.validation_report.to_dict(),
+                }
+                continue
+
+            stem = file_path.stem
+            csv_path = safe_join(output_dir, f"{stem}_cleaned.csv")
+            xlsx_path = safe_join(output_dir, f"{stem}_cleaned.xlsx")
+            cleaning_result.cleaned_df.to_csv(csv_path, index=False)
+            cleaning_result.cleaned_df.to_excel(xlsx_path, index=False)
+
             file_results[file_path.name] = {
                 "status": "cleaned",
                 "output_csv": str(csv_path.relative_to(settings.repo_root)),
@@ -93,6 +108,7 @@ def clean_run(request: CleanRequest) -> dict:
                 "columns_after": int(len(cleaning_result.cleaned_df.columns)),
                 "log": [entry.to_dict() for entry in cleaning_result.log],
                 "skipped_low_confidence": cleaning_result.skipped_low_confidence,
+                "validation_report": gate.validation_report.to_dict(),
             }
         except IngestionError as exc:
             file_results[file_path.name] = {"status": "failed", "reason": exc.reason}
@@ -125,10 +141,20 @@ def clean_run(request: CleanRequest) -> dict:
     if all_lineage_rows:
         pd.DataFrame(all_lineage_rows).to_csv(run_dir / "data_lineage.csv", index=False)
 
+    if rollback_reports:
+        rollback_result = {
+            "run_id": request.run_id,
+            "timestamp": result["timestamp"],
+            "files": rollback_reports,
+        }
+        (run_dir / "rollback_report.json").write_text(
+            json.dumps(rollback_result, indent=2, default=str), encoding="utf-8"
+        )
+
     metadata_path = run_dir / "run_metadata.json"
     if metadata_path.exists():
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        metadata["status"] = "cleaned"
+        metadata["status"] = "rollback" if any_rolled_back else "cleaned"
         metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
     return result

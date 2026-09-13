@@ -95,6 +95,62 @@ def test_clean_endpoint_appends_across_multiple_runs_without_overwriting():
     assert (global_audit["run_id"] == run_id_b).any()
 
 
+def test_clean_endpoint_rolls_back_for_unresolved_duplicate_id():
+    rows = [f"{i},active" for i in range(1, 19)] + ["18,inactive"]
+    content = ("customer_id,status\n" + "\n".join(rows) + "\n").encode()
+    run_id = _upload(content, filename="dupid.csv")
+
+    raw_path = get_settings().input_dir / run_id / "dupid.csv"
+    raw_hash_before = hashlib.sha256(raw_path.read_bytes()).hexdigest()
+
+    client.post("/api/analyze", json={"run_id": run_id})
+    clean_response = client.post("/api/clean", json={"run_id": run_id})
+    assert clean_response.status_code == 200
+    body = clean_response.json()
+    file_result = body["files"]["dupid.csv"]
+    assert file_result["status"] == "rolled_back"
+    assert "id_uniqueness" in file_result["reason"]
+    assert file_result["validation_report"]["overall_status"] == "fail"
+
+    settings = get_settings()
+
+    # No cleaned output files should have been published.
+    output_dir = settings.output_dir / run_id
+    assert not output_dir.exists() or not any(output_dir.iterdir())
+
+    # Raw file must remain byte-identical -- rollback never touches input.
+    raw_hash_after = hashlib.sha256(raw_path.read_bytes()).hexdigest()
+    assert raw_hash_after == raw_hash_before
+
+    rollback_path = settings.runs_dir / run_id / "rollback_report.json"
+    assert rollback_path.exists()
+    rollback_data = json.loads(rollback_path.read_text(encoding="utf-8"))
+    assert rollback_data["files"]["dupid.csv"]["published"] is False
+
+    metadata = json.loads((settings.runs_dir / run_id / "run_metadata.json").read_text(encoding="utf-8"))
+    assert metadata["status"] == "rollback"
+
+
+def test_clean_endpoint_still_publishes_normal_data_after_gate_added():
+    content = b"id,amount\n1,10\n2,20\n3,30\n4,40\n"
+    run_id = _upload(content, filename="normal.csv")
+
+    client.post("/api/analyze", json={"run_id": run_id})
+    clean_response = client.post("/api/clean", json={"run_id": run_id})
+    body = clean_response.json()
+    file_result = body["files"]["normal.csv"]
+
+    assert file_result["status"] == "cleaned"
+    assert file_result["validation_report"]["overall_status"] in ("pass", "warning")
+
+    settings = get_settings()
+    csv_path = settings.repo_root / file_result["output_csv"]
+    assert csv_path.exists()
+
+    metadata = json.loads((settings.runs_dir / run_id / "run_metadata.json").read_text(encoding="utf-8"))
+    assert metadata["status"] == "cleaned"
+
+
 def test_clean_endpoint_404_for_nonexistent_run():
     response = client.post("/api/clean", json={"run_id": "run_does_not_exist"})
     assert response.status_code == 404
