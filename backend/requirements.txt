@@ -11,3 +11,7 @@ scipy==1.14.1
 scikit-learn==1.6.0
 pytest==8.3.4
 httpx==0.28.1
+
+# Test-time only: extracts real text from generated PDFs so tests can assert on
+# actual report content, not just file size. The app itself never reads PDFs.
+pypdf==5.1.0

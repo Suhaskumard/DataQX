@@ -230,10 +230,16 @@ def clean_run(request: CleanRequest) -> dict:
     if all_dictionary_rows:
         pd.DataFrame(all_dictionary_rows).to_csv(run_dir / "data_dictionary.csv", index=False)
 
+    overall_quality_score = (
+        round(sum(f["after"]["overall_score"] for f in file_quality.values()) / len(file_quality))
+        if file_quality else None
+    )
+
     update_run_metadata(
         run_dir,
         status="rollback" if any_rolled_back else "cleaned",
         files=metadata_files,
+        quality_score=overall_quality_score,
     )
     record_processing_time(run_dir, "clean", time.perf_counter() - start_time)
 

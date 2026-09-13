@@ -57,6 +57,9 @@ def test_clean_endpoint_produces_correct_output_and_preserves_raw():
 
     metadata = json.loads((settings.runs_dir / run_id / "run_metadata.json").read_text(encoding="utf-8"))
     assert metadata["status"] == "cleaned"
+    # Phase 17 gap found while building Phase 18: quality_score was never actually
+    # wired into run_metadata.json (only powerbi_readiness was) -- now fixed.
+    assert metadata["quality_score"] is not None
 
     # Phase 14: output_hash recorded for a published file, matching the real cleaned CSV.
     expected_output_hash = hashlib.sha256(csv_path.read_bytes()).hexdigest()
