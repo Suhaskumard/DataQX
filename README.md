@@ -60,22 +60,57 @@ Requires only:
 
 No Docker, no database server, no external services.
 
-Backend and frontend run instructions will be added as Phase 1 (FastAPI Foundation) and
-Phase 2 (React Foundation) land.
+**Backend** (from `backend/`):
+```
+python -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\python -m uvicorn main:app --reload
+```
+Runs at `http://localhost:8000`. Health check: `GET /health`.
+
+**Frontend** (from `frontend/`), in a second terminal:
+```
+npm install
+npm run dev
+```
+Runs at `http://localhost:5173` and talks to the backend at `http://localhost:8000`
+(CORS is already configured for this origin). Open it, go to **Upload Dataset**, choose
+a CSV/Excel/JSON/Parquet file, and click **Analyze Dataset** — this runs the real
+upload → analyze → clean → validate chain against the backend and lands on a live
+**Dashboard** populated entirely from real API responses.
+
+Run the test suites:
+```
+cd backend && .venv\Scripts\python -m pytest
+cd frontend && npm run test
+```
 
 ## Development Status
 
 Implemented in phases, verified end-to-end before moving forward (see `DATAQX.pdf` §64–66
 for the mandated PLAN → IMPLEMENT → TEST → VERIFY workflow).
 
-- [x] **Phase 0 — Environment & Architecture**: directory scaffolding, docs, environment
-      verification. *(current)*
-- [ ] Phase 1 — FastAPI Foundation (health endpoint, config, logging, filesystem utils)
-- [ ] Phase 2 — React Foundation (routing, layout, dashboard shell)
-- [ ] Phase 3+ — Upload, ingestion, profiling, issue detection, cleaning, validation,
-      lineage, drift, Power BI readiness, reporting, full UI (see `DATAQX.pdf` §65)
-
-### Known environment gap
-
-Node.js/npm are **not currently installed** on this machine. This does not block Phase 0
-or Phase 1 (backend-only) but must be resolved before Phase 2 (React Foundation) begins.
+- [x] Phase 0 — Environment & Architecture
+- [x] Phase 1 — FastAPI Foundation (health endpoint, config, logging, filesystem utils)
+- [x] Phase 2 — React Foundation (routing, layout, dashboard shell)
+- [x] Phase 3 — Upload System
+- [x] Phase 4 — Multi-Format Ingestion (CSV/TSV/Excel/JSON/Parquet/Feather/XML)
+- [x] Phase 5 — Dataset Profiling
+- [x] Phase 6 — Issue Detection
+- [x] Phase 7 — Confidence Engine (HIGH/MEDIUM/LOW)
+- [x] Phase 8 — Cleaning Engine
+- [x] Phase 9 — Audit Logging (file-based, `logs/audit_log.csv`/`cleaning_log.csv`)
+- [x] Phase 10 — Data Lineage
+- [x] Phase 11 — Validation Engine
+- [x] Phase 12 — Validation Gates & Rollback
+- [x] Phase 13 — Project Plan Integration
+- [x] Phase 14 — File-Based Run Metadata
+- [x] Phase 15 — Data Drift
+- [x] Phase 16 — Power BI Validation
+- [x] Phase 17 — Data Dictionary & Summaries (Quality Score, Before/After)
+- [x] Phase 18 — PDF Reporting (`DataQX_Report.pdf`)
+- [x] **Phase 19 — Dashboard Integration**: Upload + Dashboard pages wired to real
+      backend results, no hardcoded metrics. *(current)*
+- [ ] Phase 20+ — remaining sidebar pages (Data Quality, Cleaning Actions, Lineage,
+      Drift, Power BI Readiness, Data Dictionary, Reports & Downloads UI), performance,
+      security hardening, full test/regression pass (see `DATAQX.pdf` §65)

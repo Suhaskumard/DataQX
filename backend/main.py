@@ -14,6 +14,7 @@ from app.api.health import router as health_router
 from app.api.issues import router as issues_router
 from app.api.lineage import router as lineage_router
 from app.api.powerbi import router as powerbi_router
+from app.api.quality import router as quality_router
 from app.api.report import router as report_router
 from app.api.upload import router as upload_router
 from app.api.validate import router as validate_router
@@ -45,6 +46,7 @@ app.include_router(drift_router, prefix="/api")
 app.include_router(lineage_router, prefix="/api")
 app.include_router(powerbi_router, prefix="/api")
 app.include_router(report_router, prefix="/api")
+app.include_router(quality_router, prefix="/api")
 app.include_router(validate_router, prefix="/api")
 
 
