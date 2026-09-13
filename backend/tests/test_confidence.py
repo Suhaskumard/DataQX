@@ -24,6 +24,7 @@ from app.services.profiling import profile_dataset
         ("outlier", "LOW"),
         ("constant_column", "LOW"),
         ("high_cardinality", "LOW"),
+        ("missing_required_column", "LOW"),
     ],
 )
 def test_confidence_level_per_issue_type(issue_type, expected_confidence):

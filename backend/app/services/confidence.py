@@ -107,6 +107,11 @@ _CONFIDENCE_TABLE: dict[str, tuple[str, str, str]] = {
         "No automatic action; flag for review.",
         "High cardinality alone doesn't indicate an error; informational only.",
     ),
+    "missing_required_column": (
+        "LOW",
+        "Flag for manual review.",
+        "This column is required by the project plan but is not present in the dataset; it cannot be auto-generated.",
+    ),
 }
 
 _DEFAULT_ENTRY = (

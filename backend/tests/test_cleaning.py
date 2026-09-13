@@ -150,6 +150,29 @@ def test_cleaning_log_entry_has_full_row_detail_not_capped():
     assert {c["row_index"] for c in entry.changes} == set(range(20))
 
 
+def test_protected_column_is_never_modified_even_when_actionable():
+    df = pd.DataFrame(
+        {
+            "id": range(1, 6),
+            "status": ["active", "active", "N/A", "active", "inactive"],  # protected
+            "notes": ["  padded  "] + [f"clean text {i}" for i in range(19)][:4],  # not protected
+        }
+    )
+    profile = profile_dataset(df)
+    issues = detect_issues(df, profile)
+
+    result = apply_cleaning(df, issues, protected_columns={"status"})
+
+    # Protected column: placeholder left exactly as-is, not converted to NaN.
+    assert result.cleaned_df.loc[2, "status"] == "N/A"
+    assert not any(entry.column == "status" for entry in result.log)
+    assert result.skipped_protected_columns >= 1
+
+    # Unprotected column with the same kind of issue is still cleaned.
+    assert result.cleaned_df.loc[0, "notes"] == "padded"
+    assert any(entry.column == "notes" for entry in result.log)
+
+
 def test_clean_dataset_produces_no_log_entries():
     df = pd.DataFrame(
         {

@@ -55,6 +55,7 @@ class CleaningResult:
     cleaned_df: pd.DataFrame
     log: list[CleaningLogEntry] = field(default_factory=list)
     skipped_low_confidence: int = 0
+    skipped_protected_columns: int = 0
 
 
 def _clean_whitespace(df: pd.DataFrame, issue: Issue) -> tuple[pd.DataFrame, list]:
@@ -146,10 +147,16 @@ _HANDLERS = {
 }
 
 
-def apply_cleaning(df: pd.DataFrame, issues: list[Issue]) -> CleaningResult:
+def apply_cleaning(
+    df: pd.DataFrame,
+    issues: list[Issue],
+    protected_columns: set[str] | None = None,
+) -> CleaningResult:
+    protected_columns = protected_columns or set()
     working = df.copy()
     log: list[CleaningLogEntry] = []
     skipped_low_confidence = 0
+    skipped_protected_columns = 0
 
     actionable_issues = sorted(
         (issue for issue in issues if issue.issue_type in _CLEANING_ORDER),
@@ -163,6 +170,12 @@ def apply_cleaning(df: pd.DataFrame, issues: list[Issue]) -> CleaningResult:
             skipped_low_confidence += 1
 
     for issue in actionable_issues:
+        # Explicit project requirements outrank confidence (DATAQX.pdf S12 priority
+        # order): a protected column is never modified, no matter how safe the fix.
+        if issue.column in protected_columns:
+            skipped_protected_columns += 1
+            continue
+
         decision = classify_issue(issue)
         if decision.confidence == "LOW":
             skipped_low_confidence += 1
@@ -186,4 +199,9 @@ def apply_cleaning(df: pd.DataFrame, issues: list[Issue]) -> CleaningResult:
             )
         )
 
-    return CleaningResult(cleaned_df=working, log=log, skipped_low_confidence=skipped_low_confidence)
+    return CleaningResult(
+        cleaned_df=working,
+        log=log,
+        skipped_low_confidence=skipped_low_confidence,
+        skipped_protected_columns=skipped_protected_columns,
+    )

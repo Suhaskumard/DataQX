@@ -21,6 +21,7 @@ from app.services.ingestion import IngestionError, load_dataset
 from app.services.issue_detection import detect_issues
 from app.services.lineage import build_lineage
 from app.services.profiling import profile_dataset
+from app.services.project_plan import load_project_plan
 from app.services.rollback import evaluate_gate
 from app.utils.filesystem import get_run_dir, safe_join
 
@@ -50,6 +51,10 @@ def clean_run(request: CleanRequest) -> dict:
     output_dir = safe_join(settings.output_dir, request.run_id)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    run_dir = get_run_dir(request.run_id)
+    project_plan = load_project_plan(run_dir)
+    protected_columns = set(project_plan.protected_columns) if project_plan else set()
+
     file_results: dict[str, dict] = {}
     all_audit_rows: list[dict] = []
     all_cleaning_rows: list[dict] = []
@@ -62,7 +67,7 @@ def clean_run(request: CleanRequest) -> dict:
             ingestion_result = load_dataset(file_path)
             profile = profile_dataset(ingestion_result.dataframe, source_path=file_path)
             issues = detect_issues(ingestion_result.dataframe, profile)
-            cleaning_result = apply_cleaning(ingestion_result.dataframe, issues)
+            cleaning_result = apply_cleaning(ingestion_result.dataframe, issues, protected_columns=protected_columns)
 
             audit_rows, cleaning_rows = build_log_rows(
                 request.run_id, file_path.name, issues, cleaning_result.log
@@ -116,7 +121,6 @@ def clean_run(request: CleanRequest) -> dict:
             logger.exception("Unexpected error cleaning %s", file_path)
             file_results[file_path.name] = {"status": "failed", "reason": "Could not clean this file."}
 
-    run_dir = get_run_dir(request.run_id)
     result = {
         "run_id": request.run_id,
         "timestamp": datetime.now(timezone.utc).isoformat(),

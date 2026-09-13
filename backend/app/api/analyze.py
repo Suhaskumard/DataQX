@@ -18,6 +18,7 @@ from app.services.confidence import classify_issue
 from app.services.ingestion import IngestionError, load_dataset
 from app.services.issue_detection import detect_issues
 from app.services.profiling import profile_dataset
+from app.services.project_plan import check_required_columns, load_project_plan
 from app.utils.filesystem import get_run_dir, safe_join
 
 router = APIRouter()
@@ -43,6 +44,9 @@ def analyze_run(request: AnalyzeRequest) -> dict:
     if not raw_files:
         raise HTTPException(status_code=404, detail=f"No uploaded files found for run '{request.run_id}'.")
 
+    run_dir = get_run_dir(request.run_id)
+    project_plan = load_project_plan(run_dir)
+
     file_profiles: dict[str, dict] = {}
     file_issues: dict[str, list] = {}
     for file_path in raw_files:
@@ -50,6 +54,8 @@ def analyze_run(request: AnalyzeRequest) -> dict:
             ingestion_result = load_dataset(file_path)
             profile = profile_dataset(ingestion_result.dataframe, source_path=file_path)
             issues = detect_issues(ingestion_result.dataframe, profile)
+            if project_plan is not None:
+                issues = issues + check_required_columns(ingestion_result.dataframe, project_plan)
             issues_with_confidence = [
                 {**issue.to_dict(), "confidence": classify_issue(issue).to_dict()} for issue in issues
             ]
@@ -67,7 +73,6 @@ def analyze_run(request: AnalyzeRequest) -> dict:
             logger.exception("Unexpected error profiling %s", file_path)
             file_profiles[file_path.name] = {"status": "failed", "reason": "Could not analyze this file."}
 
-    run_dir = get_run_dir(request.run_id)
     timestamp = datetime.now(timezone.utc).isoformat()
     result = {
         "run_id": request.run_id,
