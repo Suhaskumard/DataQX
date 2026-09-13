@@ -1,0 +1,11 @@
+customer_id,name,category,age,signup_date,revenue,notes
+1,Alice Johnson,gold,29,2024-01-15,1000,Regular customer
+2,Bob Smith,silver,34,2024-02-20,"1,500",
+3,  Carol White  ,gold,,03/04/2024,2000,Whitespace in name
+4,David Lee,bronze,41,2024-05-10,-500,Negative revenue
+5,Eve Garcia,unknown_tier,150,2024-06-01,3000,Invalid category and outlier age
+6,Frank Müller,silver,38,2024-07-22,1800,Encoding edge case in name
+7,N/A,gold,45,2024-08-30,2200,Missing name placeholder
+8,Grace Kim,bronze,abc,2024-09-14,900,Wrong type in age column
+9,Henry Chen,gold,31,2024-10-05,2500,Duplicate id below
+9,Henry Chen,gold,31,2024-10-05,2500,Duplicate row

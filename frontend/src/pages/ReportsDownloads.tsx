@@ -43,7 +43,10 @@ export default function ReportsDownloads() {
         )}
         <DownloadLink href={reportUrl(run.runId)} label="Download PDF Report" />
         <DownloadLink href={downloadUrl(run.runId, "cleaning_log.csv")} label="Download Cleaning Log" />
+        <DownloadLink href={downloadUrl(run.runId, "audit_log.csv")} label="Download Audit Log" />
         <DownloadLink href={downloadUrl(run.runId, "data_lineage.csv")} label="Download Data Lineage" />
+        <DownloadLink href={downloadUrl(run.runId, "drift_report.json")} label="Download Drift Report" />
+        <DownloadLink href={downloadUrl(run.runId, "validation_report.json")} label="Download Validation Report" />
         <DownloadLink href={downloadUrl(run.runId, "data_dictionary.csv")} label="Download Data Dictionary" />
         <DownloadLink href={downloadUrl(run.runId, "before_after_summary.csv")} label="Download Before/After Summary" />
       </div>

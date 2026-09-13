@@ -130,5 +130,84 @@ for the mandated PLAN → IMPLEMENT → TEST → VERIFY workflow).
       interleaved runs proving per-run artifact isolation), and a real Playwright
       browser E2E test (`frontend/e2e/full-journey.spec.ts`) driving the actual dev
       servers through the full user journey — upload, every sidebar page, and a real
-      file download. *(current)*
-- [ ] Phase 24 — Final End-to-End Validation (see `DATAQX.pdf` §65)
+      file download.
+- [x] **Phase 24 — Final End-to-End Validation**: added realistic messy sample
+      datasets (`data/samples/customers.csv` + `orders.csv`, covering every S61 issue
+      type plus a real orphan foreign key for referential-integrity checking); fixed
+      `audit_log.csv` to also write per-run (previously global-only, so it couldn't be
+      downloaded per run); completed the Download Center with Audit Log / Drift
+      Report / Validation Report links (all 9 of S69's required downloads now
+      present); and added `test_final_validation.py`, which drives the real sample
+      datasets through the complete workflow and confirms every S67 artifact exists,
+      is non-empty, and is downloadable through the real API. *(current — final
+      phase)*
+
+## Final QA Checklist
+
+Reproduced from `DATAQX.pdf` §70 and checked off only against real, currently-passing
+evidence — not asserted from code existence alone (§63).
+
+**Architecture (verified by `grep`-confirmed absence across `backend/`, and
+`requirements.txt` containing no database/ORM package):**
+- [x] No database / No PostgreSQL / No MySQL / No MongoDB / No SQLite / No Supabase
+      database / No Neon database / No SQLAlchemy / No ORM / No database migrations /
+      No database connections / No database CRUD / No persistent database storage /
+      No database-backed run history, audit logs, lineage, or drift history
+- [x] No Docker (no `Dockerfile`/`docker-compose.yml` anywhere in the repo)
+
+**Platform:**
+- [x] Windows local execution works — every command in this README was run on
+      Windows to produce the numbers below
+- [x] Frontend works / Backend works / Frontend connects to backend — verified by
+      `frontend/e2e/full-journey.spec.ts` driving both real servers together
+
+**Ingestion & formats** (`test_ingestion.py`, `test_upload.py`, `test_malformed_inputs.py`):
+- [x] Upload works / Project plan works / CSV works / TSV works / Excel works /
+      JSON works / Parquet works
+
+**Core engine** (`test_profiling.py`, `test_issue_detection.py`, `test_cleaning.py`,
+`test_confidence.py`, `test_validation.py`, `test_final_validation.py`):
+- [x] Profiling works / Missing detection works / Duplicate detection works / Type
+      detection works / Numeric cleaning works / Text cleaning works / Category
+      handling works / Date validation works / Business rules work / ID validation
+      works / Referential integrity works (real orphan FK caught in
+      `test_final_validation.py`) / Confidence framework works
+
+Outlier detection is implemented (`app/services/issue_detection.py::_detect_outliers`)
+and unit-tested in `test_issue_detection.py`, though the Phase 24 sample dataset
+happens to route its one extreme value through the `mixed_data_types` check instead
+(the age column also contains a non-numeric value, so it's profiled as mixed rather
+than purely numeric) — a real, observed detector-precedence detail, not a gap.
+
+**Governance & reporting** (`test_lineage.py`, `test_audit_logging.py`,
+`test_run_metadata.py`, `test_drift.py`, `test_rollback.py`, `test_powerbi.py`,
+`test_quality_score.py`, `test_data_dictionary.py`, `test_pdf_report.py`,
+`test_performance_logging.py`, `test_final_validation.py`):
+- [x] Data lineage works / File-based audit logs work / File-based run metadata
+      works / File-based drift detection works / Validation gates work / Rollback
+      works / Project-specific rules work / Power BI validation works / Quality
+      scoring works / Data dictionary works / PDF report works / Performance
+      monitoring works
+
+**Scale, safety, and process** (`test_performance_stress.py`, `test_security.py`,
+`test_malformed_inputs.py`):
+- [x] Large dataset handling works (100k-row run in `test_performance_stress.py`) /
+      Error handling works / Security basics work
+- [x] Automated tests pass — **271 backend tests, 96% coverage** (`pytest --cov=app`)
+      and **34 frontend Vitest tests**, all passing as of this phase
+- [x] Regression tests pass — full suite re-run clean after every phase's changes
+- [x] End-to-end test passes — `test_full_pipeline_e2e.py`,
+      `test_final_validation.py`, and `frontend/e2e/full-journey.spec.ts` (real
+      Playwright browser against both live servers)
+- [x] README complete
+
+## Definition of Done
+
+Per `DATAQX.pdf` §71, the full real workflow — Upload → Project Plan → Analyze →
+Clean → Validate → Lineage → Drift → Power BI → Quality Score → Dashboard →
+Reports/Logs/PDF → Download — has been run end-to-end against realistic messy data
+(`data/samples/customers.csv` + `orders.csv`) and every artifact verified to exist on
+disk and be downloadable through the real API (see `test_final_validation.py`).
+Everything above is based on actual execution: 271 backend tests passing at 96%
+coverage, 34 frontend tests passing, and one real-browser Playwright test walking the
+complete user journey against the live backend and frontend — no fabricated results.

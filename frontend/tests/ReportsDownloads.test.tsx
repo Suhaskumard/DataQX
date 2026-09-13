@@ -38,6 +38,18 @@ describe("ReportsDownloads with a cleaned (published) run", () => {
     const pdfLink = screen.getByRole("link", { name: /Download PDF Report/i });
     expect(pdfLink).toHaveAttribute("href", expect.stringContaining("/api/report/run_test_rd"));
 
+    const auditLink = screen.getByRole("link", { name: /Download Audit Log/i });
+    expect(auditLink).toHaveAttribute("href", expect.stringContaining("/api/download/run_test_rd/audit_log.csv"));
+
+    const driftLink = screen.getByRole("link", { name: /Download Drift Report/i });
+    expect(driftLink).toHaveAttribute("href", expect.stringContaining("/api/download/run_test_rd/drift_report.json"));
+
+    const validationLink = screen.getByRole("link", { name: /Download Validation Report/i });
+    expect(validationLink).toHaveAttribute(
+      "href",
+      expect.stringContaining("/api/download/run_test_rd/validation_report.json"),
+    );
+
     expect(screen.queryByText(/rolled back/i)).not.toBeInTheDocument();
   });
 });

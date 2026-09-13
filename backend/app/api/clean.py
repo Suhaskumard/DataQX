@@ -205,6 +205,9 @@ def clean_run(request: CleanRequest) -> dict:
     if all_cleaning_rows:
         pd.DataFrame(all_cleaning_rows).to_csv(run_dir / "cleaning_log.csv", index=False)
 
+    if all_audit_rows:
+        pd.DataFrame(all_audit_rows).to_csv(run_dir / "audit_log.csv", index=False)
+
     append_rows_to_csv(settings.logs_dir / "audit_log.csv", all_audit_rows)
     append_rows_to_csv(settings.logs_dir / "cleaning_log.csv", all_cleaning_rows)
 
