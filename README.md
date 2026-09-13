@@ -83,6 +83,7 @@ Run the test suites:
 ```
 cd backend && .venv\Scripts\python -m pytest
 cd frontend && npm run test
+cd frontend && npm run test:e2e   # real Playwright browser test against both live servers
 ```
 
 ## Development Status
@@ -120,6 +121,14 @@ for the mandated PLAN → IMPLEMENT → TEST → VERIFY workflow).
       (`main.py`) that guarantees no raw stack trace ever reaches a client, basic
       hardening response headers, and a dedicated `test_security.py` /
       `test_malformed_inputs.py` suite covering path traversal, unsafe filenames,
-      extension spoofing, and corrupt/malformed dataset files. *(current)*
-- [ ] Phase 23 — Full Testing (unit/integration/frontend/E2E/regression/performance)
+      extension spoofing, and corrupt/malformed dataset files.
+- [x] **Phase 23 — Full Testing**: a full-chain backend pipeline test
+      (`test_full_pipeline_e2e.py`, upload→analyze→clean→validate→lineage→drift→
+      Power BI→dictionary→before/after→quality→report→download→performance in one
+      run), `pytest-cov` coverage reporting (270 backend tests, 96% coverage),
+      stress/concurrency tests (`test_performance_stress.py`, a 100k-row run and two
+      interleaved runs proving per-run artifact isolation), and a real Playwright
+      browser E2E test (`frontend/e2e/full-journey.spec.ts`) driving the actual dev
+      servers through the full user journey — upload, every sidebar page, and a real
+      file download. *(current)*
 - [ ] Phase 24 — Final End-to-End Validation (see `DATAQX.pdf` §65)

@@ -1,0 +1,6 @@
+customer_id,status,age
+1,active,25
+2,active,30
+3,N/A,-5
+3,N/A,-5
+4,inactive,40
