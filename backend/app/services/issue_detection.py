@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass, field
 
 import pandas as pd
 
-from app.services.profiling import DatasetProfile
+from app.services.profiling import DatasetProfile, _WHITESPACE_ISSUE_RE
 
 PLACEHOLDER_TOKENS = {
     "na", "n/a", "n.a.", "null", "none", "-", "--", "?", "unknown",
@@ -163,21 +163,33 @@ def _detect_category_inconsistencies(profile: DatasetProfile) -> list[Issue]:
     return issues
 
 
-def _detect_whitespace_formatting(profile: DatasetProfile) -> list[Issue]:
+def _detect_whitespace_formatting(df: pd.DataFrame, profile: DatasetProfile) -> list[Issue]:
+    # Scans every object-dtype column directly rather than relying only on
+    # profiling's text_extra (which is only computed for columns inferred as
+    # "string" -- a column with few distinct values, e.g. one whitespace-padded
+    # category among otherwise-clean ones, can get classified "categorical" instead
+    # and would otherwise never be checked for whitespace issues at all).
     issues = []
-    for col_profile in profile.columns:
-        extra = col_profile.text_extra
-        if not extra:
+    id_columns = {c.original_name for c in profile.columns if c.inferred_type == "id"}
+    for column in df.columns:
+        if column in id_columns:
             continue
-        count = extra.get("whitespace_issue_count", 0)
+        series = df[column]
+        if series.dtype != object:
+            continue
+        non_null = series.dropna().astype(str)
+        if non_null.empty:
+            continue
+
+        count = int(non_null.map(lambda v: bool(_WHITESPACE_ISSUE_RE.search(v))).sum())
         if count > 0:
             issues.append(
                 Issue(
                     issue_type="whitespace_formatting",
-                    column=col_profile.original_name,
+                    column=column,
                     severity="low",
                     affected_count=count,
-                    description=f"Column '{col_profile.original_name}' has {count} value(s) with leading/trailing/multiple internal spaces.",
+                    description=f"Column '{column}' has {count} value(s) with leading/trailing/multiple internal spaces.",
                 )
             )
     return issues
@@ -373,7 +385,7 @@ def detect_issues(df: pd.DataFrame, profile: DatasetProfile) -> list[Issue]:
     issues += _detect_duplicates(df, profile)
     issues += _detect_mixed_types(df, profile)
     issues += _detect_category_inconsistencies(profile)
-    issues += _detect_whitespace_formatting(profile)
+    issues += _detect_whitespace_formatting(df, profile)
     issues += _detect_date_issues(df, profile)
     issues += _detect_impossible_values(df)
     issues += _detect_outliers(profile)
