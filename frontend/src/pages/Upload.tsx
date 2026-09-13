@@ -3,8 +3,11 @@ import { useNavigate } from "react-router-dom";
 import {
   analyzeRun,
   cleanRun,
+  getBeforeAfter,
+  getDictionary,
   getDrift,
   getIssues,
+  getLineage,
   getPowerBiReadiness,
   getQuality,
   uploadDataset,
@@ -55,14 +58,30 @@ export default function Upload() {
       setStep("validating");
       const validateResult = await validateRun(runId);
 
-      const [issues, quality, powerbi, drift] = await Promise.all([
+      const [issues, quality, powerbi, drift, lineage, beforeAfter, dictionary] = await Promise.all([
         getIssues(runId),
         getQuality(runId),
         getPowerBiReadiness(runId),
         getDrift(runId),
+        getLineage(runId),
+        getBeforeAfter(runId),
+        getDictionary(runId),
       ]);
 
-      setRun({ runId, uploadResult, analyzeResult, cleanResult, validateResult, issues, quality, powerbi, drift });
+      setRun({
+        runId,
+        uploadResult,
+        analyzeResult,
+        cleanResult,
+        validateResult,
+        issues,
+        quality,
+        powerbi,
+        drift,
+        lineage,
+        beforeAfter,
+        dictionary,
+      });
       setStep("done");
       navigate("/");
     } catch (err) {

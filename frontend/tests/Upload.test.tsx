@@ -52,6 +52,15 @@ function mockFetchSequence() {
         { status: 200 },
       );
     }
+    if (url.includes("/api/lineage/")) {
+      return new Response(JSON.stringify({ files: { "data.csv": [] } }), { status: 200 });
+    }
+    if (url.includes("/api/before-after/")) {
+      return new Response(JSON.stringify({ files: { "data.csv": {} } }), { status: 200 });
+    }
+    if (url.includes("/api/dictionary/")) {
+      return new Response(JSON.stringify({ files: { "data.csv": [] } }), { status: 200 });
+    }
     throw new Error(`Unexpected fetch: ${url}`);
   }) as any;
   return calls;
@@ -81,7 +90,7 @@ describe("Upload page", () => {
     await user.click(screen.getByRole("button", { name: /analyze dataset/i }));
 
     await waitFor(() => {
-      expect(calls.some((c) => c.endsWith("/api/validate"))).toBe(true);
+      expect(calls.some((c) => c.includes("/api/dictionary/"))).toBe(true);
     });
 
     const orderedRelevant = calls.filter((c) =>
@@ -93,6 +102,9 @@ describe("Upload page", () => {
       "clean",
       "validate",
     ]);
+
+    expect(calls.some((c) => c.includes("/api/lineage/"))).toBe(true);
+    expect(calls.some((c) => c.includes("/api/before-after/"))).toBe(true);
   });
 
   it("shows a real error message when a step fails", async () => {

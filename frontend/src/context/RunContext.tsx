@@ -10,6 +10,9 @@ interface RunResults {
   quality: any;
   powerbi: any;
   drift: any;
+  lineage: any;
+  beforeAfter: any;
+  dictionary: any;
 }
 
 interface RunContextValue {

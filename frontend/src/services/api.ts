@@ -67,6 +67,22 @@ export function getDrift(runId: string): Promise<any> {
   return getJson(`/api/drift/${runId}`);
 }
 
+export function getLineage(runId: string): Promise<any> {
+  return getJson(`/api/lineage/${runId}`);
+}
+
+export function getBeforeAfter(runId: string): Promise<any> {
+  return getJson(`/api/before-after/${runId}`);
+}
+
+export function getDictionary(runId: string): Promise<any> {
+  return getJson(`/api/dictionary/${runId}`);
+}
+
 export function reportUrl(runId: string): string {
   return `${API_BASE_URL}/api/report/${runId}`;
+}
+
+export function downloadUrl(runId: string, filename: string): string {
+  return `${API_BASE_URL}/api/download/${runId}/${encodeURIComponent(filename)}`;
 }
