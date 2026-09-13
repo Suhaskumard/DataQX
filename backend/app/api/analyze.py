@@ -15,7 +15,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.core.config import get_settings
+from app.services.audit_logging import append_rows_to_csv
 from app.services.confidence import classify_issue
+from app.services.drift import detect_drift, find_previous_profile, save_profile_snapshot
 from app.services.ingestion import IngestionError, load_dataset
 from app.services.issue_detection import detect_issues
 from app.services.profiling import profile_dataset
@@ -52,6 +54,8 @@ def analyze_run(request: AnalyzeRequest) -> dict:
 
     file_profiles: dict[str, dict] = {}
     file_issues: dict[str, list] = {}
+    file_drift: dict[str, dict] = {}
+    all_drift_rows: list[dict] = []
     for file_path in raw_files:
         try:
             ingestion_result = load_dataset(file_path)
@@ -70,6 +74,27 @@ def analyze_run(request: AnalyzeRequest) -> dict:
                 "issues": issues_with_confidence,
             }
             file_issues[file_path.name] = issues_with_confidence
+
+            previous = find_previous_profile(settings.history_dir, file_path.name, exclude_run_id=request.run_id)
+            if previous is None:
+                drift_report = {"overall_status": "no_history", "compared_against": None, "findings": []}
+            else:
+                previous_run_id, previous_profile = previous
+                report = detect_drift(profile, previous_profile)
+                report.compared_against = previous_run_id
+                drift_report = report.to_dict()
+            file_drift[file_path.name] = drift_report
+            all_drift_rows.append(
+                {
+                    "run_id": request.run_id,
+                    "dataset": file_path.name,
+                    "overall_status": drift_report["overall_status"],
+                    "compared_against": drift_report["compared_against"],
+                    "finding_count": len(drift_report["findings"]),
+                }
+            )
+
+            save_profile_snapshot(settings.history_dir, file_path.name, request.run_id, profile)
         except IngestionError as exc:
             file_profiles[file_path.name] = {"status": "failed", "reason": exc.reason}
         except Exception:
@@ -90,6 +115,21 @@ def analyze_run(request: AnalyzeRequest) -> dict:
         "files": file_issues,
     }
     (run_dir / "issues.json").write_text(json.dumps(issues_result, indent=2, default=str), encoding="utf-8")
+
+    drift_result = {
+        "run_id": request.run_id,
+        "timestamp": timestamp,
+        "files": file_drift,
+    }
+    (run_dir / "drift_report.json").write_text(
+        json.dumps(drift_result, indent=2, default=str), encoding="utf-8"
+    )
+    if all_drift_rows:
+        append_rows_to_csv(
+            settings.reports_dir / "drift_report.csv",
+            all_drift_rows,
+            columns=["run_id", "dataset", "overall_status", "compared_against", "finding_count"],
+        )
 
     update_run_metadata(run_dir, status="profiled")
     record_processing_time(run_dir, "analyze", time.perf_counter() - start_time)

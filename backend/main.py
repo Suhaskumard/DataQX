@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.analyze import router as analyze_router
 from app.api.clean import router as clean_router
+from app.api.drift import router as drift_router
 from app.api.health import router as health_router
 from app.api.issues import router as issues_router
 from app.api.lineage import router as lineage_router
@@ -38,6 +39,7 @@ app.include_router(upload_router, prefix="/api")
 app.include_router(analyze_router, prefix="/api")
 app.include_router(issues_router, prefix="/api")
 app.include_router(clean_router, prefix="/api")
+app.include_router(drift_router, prefix="/api")
 app.include_router(lineage_router, prefix="/api")
 app.include_router(validate_router, prefix="/api")
 
