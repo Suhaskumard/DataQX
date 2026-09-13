@@ -40,6 +40,9 @@ class CleaningLogEntry:
     affected_count: int
     rule: str
     reason: str
+    # Full per-row detail (not capped) -- {"row_index": int|None, "original_value": ..., "new_value": ...}.
+    # Used by Phase 9's audit_logging to build row-level or aggregated CSV rows.
+    changes: list = field(default_factory=list)
     before_examples: list = field(default_factory=list)
     after_examples: list = field(default_factory=list)
 
@@ -54,42 +57,53 @@ class CleaningResult:
     skipped_low_confidence: int = 0
 
 
-def _clean_whitespace(df: pd.DataFrame, issue: Issue) -> tuple[pd.DataFrame, list, list]:
+def _clean_whitespace(df: pd.DataFrame, issue: Issue) -> tuple[pd.DataFrame, list]:
     column = issue.column
-    before = df[column].dropna().head(EXAMPLE_LIMIT).tolist()
-    df[column] = df[column].map(
-        lambda v: " ".join(v.split()) if isinstance(v, str) else v
+    series = df[column]
+    changed_mask = series.map(
+        lambda v: isinstance(v, str) and " ".join(v.split()) != v
     )
-    after = df[column].dropna().head(EXAMPLE_LIMIT).tolist()
-    return df, before, after
+    changes = [
+        {"row_index": int(idx), "original_value": series.loc[idx], "new_value": " ".join(series.loc[idx].split())}
+        for idx in series[changed_mask].index
+    ]
+    df[column] = df[column].map(lambda v: " ".join(v.split()) if isinstance(v, str) else v)
+    return df, changes
 
 
-def _clean_empty_column(df: pd.DataFrame, issue: Issue) -> tuple[pd.DataFrame, list, list]:
+def _clean_empty_column(df: pd.DataFrame, issue: Issue) -> tuple[pd.DataFrame, list]:
     column = issue.column
+    changes = [{"row_index": None, "original_value": column, "new_value": None}]
     df = df.drop(columns=[column])
-    return df, [], []
+    return df, changes
 
 
-def _clean_duplicate_rows(df: pd.DataFrame, issue: Issue) -> tuple[pd.DataFrame, list, list]:
-    before_count = len(df)
+def _clean_duplicate_rows(df: pd.DataFrame, issue: Issue) -> tuple[pd.DataFrame, list]:
+    duplicate_mask = df.duplicated(keep="first")
+    changes = [
+        {"row_index": int(idx), "original_value": "<duplicate row>", "new_value": None}
+        for idx in df[duplicate_mask].index
+    ]
     df = df.drop_duplicates(keep="first").reset_index(drop=True)
-    after_count = len(df)
-    return df, [f"{before_count} rows"], [f"{after_count} rows"]
+    return df, changes
 
 
-def _clean_missing_placeholder(df: pd.DataFrame, issue: Issue) -> tuple[pd.DataFrame, list, list]:
+def _clean_missing_placeholder(df: pd.DataFrame, issue: Issue) -> tuple[pd.DataFrame, list]:
     column = issue.column
     series = df[column]
     is_placeholder_mask = series.map(lambda v: isinstance(v, str) and _is_placeholder(v))
-    before = series[is_placeholder_mask].head(EXAMPLE_LIMIT).tolist()
+    changes = [
+        {"row_index": int(idx), "original_value": series.loc[idx], "new_value": None}
+        for idx in series[is_placeholder_mask].index
+    ]
     df.loc[is_placeholder_mask, column] = pd.NA
-    return df, before, ["NaN"] * len(before)
+    return df, changes
 
 
-def _clean_category_inconsistency(df: pd.DataFrame, issue: Issue) -> tuple[pd.DataFrame, list, list]:
+def _clean_category_inconsistency(df: pd.DataFrame, issue: Issue) -> tuple[pd.DataFrame, list]:
     column = issue.column
     groups = issue.details.get("groups", [])
-    before_all, after_all = [], []
+    changes = []
     counts = df[column].value_counts()
 
     for group in groups:
@@ -99,21 +113,27 @@ def _clean_category_inconsistency(df: pd.DataFrame, issue: Issue) -> tuple[pd.Da
         canonical = max(variants_in_data, key=lambda v: counts[v])
         replacements = {v: canonical for v in variants_in_data if v != canonical}
         if replacements:
-            before_all.extend(replacements.keys())
-            after_all.extend([canonical] * len(replacements))
+            series = df[column]
+            for idx in series[series.isin(replacements.keys())].index:
+                changes.append(
+                    {"row_index": int(idx), "original_value": series.loc[idx], "new_value": canonical}
+                )
             df[column] = df[column].replace(replacements)
 
-    return df, before_all[:EXAMPLE_LIMIT], after_all[:EXAMPLE_LIMIT]
+    return df, changes
 
 
-def _clean_invalid_date(df: pd.DataFrame, issue: Issue) -> tuple[pd.DataFrame, list, list]:
+def _clean_invalid_date(df: pd.DataFrame, issue: Issue) -> tuple[pd.DataFrame, list]:
     column = issue.column
     series = df[column]
     parsed = pd.to_datetime(series, errors="coerce")
     invalid_mask = parsed.isna() & series.notna()
-    before = series[invalid_mask].head(EXAMPLE_LIMIT).tolist()
+    changes = [
+        {"row_index": int(idx), "original_value": series.loc[idx], "new_value": None}
+        for idx in series[invalid_mask].index
+    ]
     df.loc[invalid_mask, column] = pd.NA
-    return df, before, ["NaN"] * len(before)
+    return df, changes
 
 
 _HANDLERS = {
@@ -149,7 +169,7 @@ def apply_cleaning(df: pd.DataFrame, issues: list[Issue]) -> CleaningResult:
             continue
 
         handler = _HANDLERS[issue.issue_type]
-        working, before, after = handler(working, issue)
+        working, changes = handler(working, issue)
 
         log.append(
             CleaningLogEntry(
@@ -160,8 +180,9 @@ def apply_cleaning(df: pd.DataFrame, issues: list[Issue]) -> CleaningResult:
                 affected_count=issue.affected_count,
                 rule=decision.rule,
                 reason=decision.reason,
-                before_examples=[str(v) for v in before],
-                after_examples=[str(v) for v in after],
+                changes=changes,
+                before_examples=[str(c["original_value"]) for c in changes[:EXAMPLE_LIMIT]],
+                after_examples=[str(c["new_value"]) for c in changes[:EXAMPLE_LIMIT]],
             )
         )
 

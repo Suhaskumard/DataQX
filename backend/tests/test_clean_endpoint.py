@@ -1,9 +1,11 @@
 import hashlib
 import json
 
+import pandas as pd
 from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
+from app.services.audit_logging import AUDIT_COLUMNS
 from main import app
 
 client = TestClient(app)
@@ -55,6 +57,42 @@ def test_clean_endpoint_produces_correct_output_and_preserves_raw():
 
     metadata = json.loads((settings.runs_dir / run_id / "run_metadata.json").read_text(encoding="utf-8"))
     assert metadata["status"] == "cleaned"
+
+    # Per-run CSV cleaning log (S34's run-directory example).
+    run_csv_path = settings.runs_dir / run_id / "cleaning_log.csv"
+    assert run_csv_path.exists()
+    run_csv = pd.read_csv(run_csv_path)
+    assert set(run_csv.columns) == set(AUDIT_COLUMNS)
+    assert "missing_value_placeholder" in run_csv["issue_type"].values
+    assert "whitespace_formatting" in run_csv["issue_type"].values
+
+    # Global, cumulative logs (S9/S33) -- this run's rows must be present.
+    global_audit_path = settings.logs_dir / "audit_log.csv"
+    global_cleaning_path = settings.logs_dir / "cleaning_log.csv"
+    assert global_audit_path.exists()
+    assert global_cleaning_path.exists()
+
+    global_audit = pd.read_csv(global_audit_path)
+    assert set(global_audit.columns) == set(AUDIT_COLUMNS)
+    assert (global_audit["run_id"] == run_id).any()
+
+
+def test_clean_endpoint_appends_across_multiple_runs_without_overwriting():
+    settings = get_settings()
+    global_audit_path = settings.logs_dir / "audit_log.csv"
+    rows_before = len(pd.read_csv(global_audit_path)) if global_audit_path.exists() else 0
+
+    run_id_a = _upload(b"id,status\n1,active\n2,N/A\n", filename="a.csv")
+    run_id_b = _upload(b"id,status\n1,active\n2,N/A\n3,N/A\n", filename="b.csv")
+
+    for run_id in (run_id_a, run_id_b):
+        client.post("/api/analyze", json={"run_id": run_id})
+        client.post("/api/clean", json={"run_id": run_id})
+
+    global_audit = pd.read_csv(global_audit_path)
+    assert len(global_audit) > rows_before
+    assert (global_audit["run_id"] == run_id_a).any()
+    assert (global_audit["run_id"] == run_id_b).any()
 
 
 def test_clean_endpoint_404_for_nonexistent_run():

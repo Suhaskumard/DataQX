@@ -10,10 +10,12 @@ import json
 import logging
 from datetime import datetime, timezone
 
+import pandas as pd
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.core.config import get_settings
+from app.services.audit_logging import append_rows_to_csv, build_log_rows
 from app.services.cleaning import apply_cleaning
 from app.services.ingestion import IngestionError, load_dataset
 from app.services.issue_detection import detect_issues
@@ -47,6 +49,8 @@ def clean_run(request: CleanRequest) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     file_results: dict[str, dict] = {}
+    all_audit_rows: list[dict] = []
+    all_cleaning_rows: list[dict] = []
     for file_path in raw_files:
         try:
             ingestion_result = load_dataset(file_path)
@@ -59,6 +63,12 @@ def clean_run(request: CleanRequest) -> dict:
             xlsx_path = safe_join(output_dir, f"{stem}_cleaned.xlsx")
             cleaning_result.cleaned_df.to_csv(csv_path, index=False)
             cleaning_result.cleaned_df.to_excel(xlsx_path, index=False)
+
+            audit_rows, cleaning_rows = build_log_rows(
+                request.run_id, file_path.name, issues, cleaning_result.log
+            )
+            all_audit_rows.extend(audit_rows)
+            all_cleaning_rows.extend(cleaning_rows)
 
             file_results[file_path.name] = {
                 "status": "cleaned",
@@ -84,6 +94,12 @@ def clean_run(request: CleanRequest) -> dict:
         "files": file_results,
     }
     (run_dir / "cleaning_log.json").write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
+
+    if all_cleaning_rows:
+        pd.DataFrame(all_cleaning_rows).to_csv(run_dir / "cleaning_log.csv", index=False)
+
+    append_rows_to_csv(settings.logs_dir / "audit_log.csv", all_audit_rows)
+    append_rows_to_csv(settings.logs_dir / "cleaning_log.csv", all_cleaning_rows)
 
     metadata_path = run_dir / "run_metadata.json"
     if metadata_path.exists():

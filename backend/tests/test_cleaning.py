@@ -135,6 +135,21 @@ def test_unrelated_columns_untouched():
     assert result.cleaned_df["amount"].tolist() == [10, 20, 30, 40, 50]
 
 
+def test_cleaning_log_entry_has_full_row_detail_not_capped():
+    # 20 placeholder rows -- more than EXAMPLE_LIMIT (5) -- to prove `changes`
+    # captures every affected row, not just the capped preview examples.
+    values = ["N/A"] * 20 + ["active"] * 5
+    df = pd.DataFrame({"id": range(len(values)), "status": values})
+
+    result, _ = _clean(df)
+
+    entry = next(e for e in result.log if e.issue_type == "missing_value_placeholder")
+    assert len(entry.changes) == 20
+    assert len(entry.before_examples) == 5  # preview stays capped
+    assert all(c["new_value"] is None for c in entry.changes)
+    assert {c["row_index"] for c in entry.changes} == set(range(20))
+
+
 def test_clean_dataset_produces_no_log_entries():
     df = pd.DataFrame(
         {
