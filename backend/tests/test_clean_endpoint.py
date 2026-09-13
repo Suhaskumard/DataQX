@@ -81,6 +81,29 @@ def test_clean_endpoint_produces_correct_output_and_preserves_raw():
     assert set(global_audit.columns) == set(AUDIT_COLUMNS)
     assert (global_audit["run_id"] == run_id).any()
 
+    # Phase 17: quality score, before/after summary, data dictionary.
+    quality = json.loads((settings.runs_dir / run_id / "quality_report.json").read_text(encoding="utf-8"))
+    file_quality = quality["files"]["data.csv"]
+    assert file_quality["after"]["overall_score"] >= file_quality["before"]["overall_score"]
+
+    before_after = json.loads(
+        (settings.runs_dir / run_id / "before_after_summary.json").read_text(encoding="utf-8")
+    )
+    # "N/A" is literal text pre-clean (missing_count doesn't see it) and becomes a
+    # real NaN post-clean -- missing_values correctly INCREASES here, since cleaning
+    # is revealing previously-hidden missingness, not losing data (see Phase 12's
+    # rationale for why a naive "missingness up = bad" rule would be wrong).
+    missing_metric = before_after["files"]["data.csv"]["missing_values"]
+    assert missing_metric["after"] > missing_metric["before"]
+    assert before_after["files"]["data.csv"]["quality_score"]["after"] >= before_after["files"]["data.csv"]["quality_score"]["before"]
+
+    dictionary_path = settings.runs_dir / run_id / "data_dictionary.csv"
+    assert dictionary_path.exists()
+    dictionary = pd.read_csv(dictionary_path)
+    assert "column_name" in dictionary.columns
+    status_row = dictionary[dictionary["original_name"] == "status"].iloc[0]
+    assert pd.notna(status_row["cleaning_actions"])
+
 
 def test_clean_endpoint_appends_across_multiple_runs_without_overwriting():
     settings = get_settings()
