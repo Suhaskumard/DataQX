@@ -72,8 +72,15 @@ def _load_delimited_text(path: Path, default_delimiter: str | None) -> Ingestion
     delimiter = _sniff_delimiter(sample, default_delimiter or ",")
     warnings: list[str] = []
 
+    # keep_default_na=False + na_values=[]: pandas' default NA list silently turns
+    # placeholder text ("N/A", "NA", "null", "Unknown", ...) into NaN during parsing,
+    # which would make it invisible to Phase 6's contextual missing-value detection
+    # (DATAQX.pdf S17 requires a *decision*, not pandas' blind default). Only a
+    # genuinely empty cell is treated as missing here (normalized to NaN below);
+    # everything else survives as literal text for issue detection to judge.
+    read_kwargs = dict(sep=delimiter, keep_default_na=False, na_values=[])
     try:
-        df = pd.read_csv(io.StringIO(text), sep=delimiter)
+        df = pd.read_csv(io.StringIO(text), **read_kwargs)
     except pd.errors.ParserError:
         bad_lines: list[list[str]] = []
 
@@ -83,15 +90,18 @@ def _load_delimited_text(path: Path, default_delimiter: str | None) -> Ingestion
 
         df = pd.read_csv(
             io.StringIO(text),
-            sep=delimiter,
             engine="python",
             on_bad_lines=_collect_bad_line,
+            **read_kwargs,
         )
         if bad_lines:
             warnings.append(f"Skipped {len(bad_lines)} malformed row(s) with an unexpected field count.")
 
     if df.shape[1] == 0:
         raise IngestionError("File has no columns after parsing.")
+
+    for column in df.select_dtypes(include="object").columns:
+        df[column] = df[column].where(df[column].str.strip() != "", other=pd.NA)
 
     return IngestionResult(
         dataframe=df,

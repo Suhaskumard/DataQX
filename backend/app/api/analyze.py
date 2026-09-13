@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from app.core.config import get_settings
 from app.services.ingestion import IngestionError, load_dataset
+from app.services.issue_detection import detect_issues
 from app.services.profiling import profile_dataset
 from app.utils.filesystem import get_run_dir, safe_join
 
@@ -42,16 +43,20 @@ def analyze_run(request: AnalyzeRequest) -> dict:
         raise HTTPException(status_code=404, detail=f"No uploaded files found for run '{request.run_id}'.")
 
     file_profiles: dict[str, dict] = {}
+    file_issues: dict[str, list] = {}
     for file_path in raw_files:
         try:
             ingestion_result = load_dataset(file_path)
             profile = profile_dataset(ingestion_result.dataframe, source_path=file_path)
+            issues = detect_issues(ingestion_result.dataframe, profile)
             file_profiles[file_path.name] = {
                 "status": "profiled",
                 "detected_format": ingestion_result.detected_format,
                 "ingestion_warnings": ingestion_result.warnings,
                 "profile": profile.to_dict(),
+                "issues": [issue.to_dict() for issue in issues],
             }
+            file_issues[file_path.name] = [issue.to_dict() for issue in issues]
         except IngestionError as exc:
             file_profiles[file_path.name] = {"status": "failed", "reason": exc.reason}
         except Exception:
@@ -59,12 +64,20 @@ def analyze_run(request: AnalyzeRequest) -> dict:
             file_profiles[file_path.name] = {"status": "failed", "reason": "Could not analyze this file."}
 
     run_dir = get_run_dir(request.run_id)
+    timestamp = datetime.now(timezone.utc).isoformat()
     result = {
         "run_id": request.run_id,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": timestamp,
         "files": file_profiles,
     }
     (run_dir / "profile.json").write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
+
+    issues_result = {
+        "run_id": request.run_id,
+        "timestamp": timestamp,
+        "files": file_issues,
+    }
+    (run_dir / "issues.json").write_text(json.dumps(issues_result, indent=2, default=str), encoding="utf-8")
 
     metadata_path = run_dir / "run_metadata.json"
     if metadata_path.exists():
