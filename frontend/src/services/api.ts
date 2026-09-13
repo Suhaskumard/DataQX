@@ -79,6 +79,10 @@ export function getDictionary(runId: string): Promise<any> {
   return getJson(`/api/dictionary/${runId}`);
 }
 
+export function getPerformance(runId: string): Promise<any> {
+  return getJson(`/api/performance/${runId}`);
+}
+
 export function reportUrl(runId: string): string {
   return `${API_BASE_URL}/api/report/${runId}`;
 }

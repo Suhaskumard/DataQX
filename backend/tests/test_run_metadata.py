@@ -3,6 +3,7 @@ import json
 
 from app.services.project_plan import parse_project_plan
 from app.services.run_metadata import (
+    accumulate_processing_time,
     compute_file_hash,
     derive_project_name,
     record_processing_time,
@@ -51,6 +52,29 @@ def test_record_processing_time_accumulates_stages(tmp_path):
     metadata = json.loads((run_dir / "run_metadata.json").read_text(encoding="utf-8"))
     assert metadata["processing_time_seconds"]["upload"] == 0.05
     assert metadata["processing_time_seconds"]["analyze"] == 0.12
+
+
+def test_accumulate_processing_time_adds_across_calls(tmp_path):
+    run_dir = tmp_path
+    update_run_metadata(run_dir, run_id="run_1")
+
+    accumulate_processing_time(run_dir, "file_loading", 0.10)
+    accumulate_processing_time(run_dir, "file_loading", 0.25)
+
+    metadata = json.loads((run_dir / "run_metadata.json").read_text(encoding="utf-8"))
+    assert metadata["processing_time_seconds"]["file_loading"] == 0.35
+
+
+def test_accumulate_processing_time_does_not_affect_other_stages(tmp_path):
+    run_dir = tmp_path
+    update_run_metadata(run_dir, run_id="run_1")
+
+    record_processing_time(run_dir, "analyze", 1.0)
+    accumulate_processing_time(run_dir, "profiling", 0.2)
+
+    metadata = json.loads((run_dir / "run_metadata.json").read_text(encoding="utf-8"))
+    assert metadata["processing_time_seconds"]["analyze"] == 1.0
+    assert metadata["processing_time_seconds"]["profiling"] == 0.2
 
 
 def test_derive_project_name_from_objective():

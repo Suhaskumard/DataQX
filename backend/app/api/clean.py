@@ -23,12 +23,19 @@ from app.services.data_dictionary import build_data_dictionary
 from app.services.ingestion import IngestionError, load_dataset
 from app.services.issue_detection import detect_issues
 from app.services.lineage import build_lineage
+from app.services.performance_logging import log_stage
+from app.services.pipeline_cache import load_cache_entry, save_cache_entry
 from app.services.powerbi import assess_single_file_readiness
 from app.services.profiling import profile_dataset
 from app.services.project_plan import load_project_plan
 from app.services.quality_score import compute_quality_score
 from app.services.rollback import evaluate_gate
-from app.services.run_metadata import compute_file_hash, record_processing_time, update_run_metadata
+from app.services.run_metadata import (
+    accumulate_processing_time,
+    compute_file_hash,
+    record_processing_time,
+    update_run_metadata,
+)
 from app.utils.filesystem import get_run_dir, safe_join
 
 router = APIRouter()
@@ -73,11 +80,29 @@ def clean_run(request: CleanRequest) -> dict:
     file_before_after: dict[str, dict] = {}
     all_dictionary_rows: list[dict] = []
     any_rolled_back = False
+    stage_totals = {"file_loading": 0.0, "profiling": 0.0, "issue_detection": 0.0, "output_generation": 0.0}
     for file_path in raw_files:
         try:
+            stage_start = time.perf_counter()
             ingestion_result = load_dataset(file_path)
-            profile = profile_dataset(ingestion_result.dataframe, source_path=file_path)
-            issues = detect_issues(ingestion_result.dataframe, profile)
+            stage_totals["file_loading"] += time.perf_counter() - stage_start
+
+            stage_start = time.perf_counter()
+            cached = load_cache_entry(run_dir, file_path.name)
+            if cached is not None:
+                profile, issues = cached
+                stage_totals["profiling"] += time.perf_counter() - stage_start
+            else:
+                stage_start = time.perf_counter()
+                profile = profile_dataset(ingestion_result.dataframe, source_path=file_path)
+                stage_totals["profiling"] += time.perf_counter() - stage_start
+
+                stage_start = time.perf_counter()
+                issues = detect_issues(ingestion_result.dataframe, profile)
+                stage_totals["issue_detection"] += time.perf_counter() - stage_start
+
+                save_cache_entry(run_dir, file_path.name, profile, issues)
+
             cleaning_result = apply_cleaning(ingestion_result.dataframe, issues, protected_columns=protected_columns)
 
             audit_rows, cleaning_rows = build_log_rows(
@@ -142,11 +167,13 @@ def clean_run(request: CleanRequest) -> dict:
                 }
                 continue
 
+            stage_start = time.perf_counter()
             stem = file_path.stem
             csv_path = safe_join(output_dir, f"{stem}_cleaned.csv")
             xlsx_path = safe_join(output_dir, f"{stem}_cleaned.xlsx")
             cleaning_result.cleaned_df.to_csv(csv_path, index=False)
             cleaning_result.cleaned_df.to_excel(xlsx_path, index=False)
+            stage_totals["output_generation"] += time.perf_counter() - stage_start
 
             metadata_files[file_path.name] = {"output_hash": compute_file_hash(csv_path), "status": "cleaned"}
 
@@ -242,5 +269,8 @@ def clean_run(request: CleanRequest) -> dict:
         quality_score=overall_quality_score,
     )
     record_processing_time(run_dir, "clean", time.perf_counter() - start_time)
+    for stage, seconds in stage_totals.items():
+        accumulate_processing_time(run_dir, stage, seconds)
+        log_stage(settings.logs_dir, request.run_id, stage, seconds)
 
     return result

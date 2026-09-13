@@ -181,7 +181,7 @@ def _detect_whitespace_formatting(df: pd.DataFrame, profile: DatasetProfile) -> 
         if non_null.empty:
             continue
 
-        count = int(non_null.map(lambda v: bool(_WHITESPACE_ISSUE_RE.search(v))).sum())
+        count = int(non_null.str.contains(_WHITESPACE_ISSUE_RE, regex=True).sum())
         if count > 0:
             issues.append(
                 Issue(

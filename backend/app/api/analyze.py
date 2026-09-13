@@ -20,10 +20,12 @@ from app.services.confidence import classify_issue
 from app.services.drift import detect_drift, find_previous_profile, save_profile_snapshot
 from app.services.ingestion import IngestionError, load_dataset
 from app.services.issue_detection import detect_issues
+from app.services.performance_logging import log_stage
+from app.services.pipeline_cache import load_cache_entry, save_cache_entry
 from app.services.powerbi import PowerBICheck, assess_relationships, assess_single_file_readiness, compute_score
 from app.services.profiling import profile_dataset
 from app.services.project_plan import check_required_columns, load_project_plan
-from app.services.run_metadata import record_processing_time, update_run_metadata
+from app.services.run_metadata import accumulate_processing_time, record_processing_time, update_run_metadata
 from app.utils.filesystem import get_run_dir, safe_join
 
 router = APIRouter()
@@ -59,11 +61,36 @@ def analyze_run(request: AnalyzeRequest) -> dict:
     file_powerbi: dict[str, dict] = {}
     all_drift_rows: list[dict] = []
     successful_files: dict[str, tuple] = {}
+    stage_totals = {
+        "file_loading": 0.0,
+        "profiling": 0.0,
+        "issue_detection": 0.0,
+        "drift_detection": 0.0,
+        "powerbi_validation": 0.0,
+    }
     for file_path in raw_files:
         try:
+            stage_start = time.perf_counter()
             ingestion_result = load_dataset(file_path)
-            profile = profile_dataset(ingestion_result.dataframe, source_path=file_path)
-            issues = detect_issues(ingestion_result.dataframe, profile)
+            stage_totals["file_loading"] += time.perf_counter() - stage_start
+
+            stage_start = time.perf_counter()
+            cached = load_cache_entry(run_dir, file_path.name)
+            if cached is not None:
+                profile, base_issues = cached
+                stage_totals["profiling"] += time.perf_counter() - stage_start
+            else:
+                stage_start = time.perf_counter()
+                profile = profile_dataset(ingestion_result.dataframe, source_path=file_path)
+                stage_totals["profiling"] += time.perf_counter() - stage_start
+
+                stage_start = time.perf_counter()
+                base_issues = detect_issues(ingestion_result.dataframe, profile)
+                stage_totals["issue_detection"] += time.perf_counter() - stage_start
+
+                save_cache_entry(run_dir, file_path.name, profile, base_issues)
+
+            issues = base_issues
             if project_plan is not None:
                 issues = issues + check_required_columns(ingestion_result.dataframe, project_plan)
             issues_with_confidence = [
@@ -78,6 +105,7 @@ def analyze_run(request: AnalyzeRequest) -> dict:
             }
             file_issues[file_path.name] = issues_with_confidence
 
+            stage_start = time.perf_counter()
             previous = find_previous_profile(settings.history_dir, file_path.name, exclude_run_id=request.run_id)
             if previous is None:
                 drift_report = {"overall_status": "no_history", "compared_against": None, "findings": []}
@@ -98,9 +126,12 @@ def analyze_run(request: AnalyzeRequest) -> dict:
             )
 
             save_profile_snapshot(settings.history_dir, file_path.name, request.run_id, profile)
+            stage_totals["drift_detection"] += time.perf_counter() - stage_start
 
+            stage_start = time.perf_counter()
             powerbi_report = assess_single_file_readiness(ingestion_result.dataframe, profile, issues)
             file_powerbi[file_path.name] = powerbi_report.to_dict()
+            stage_totals["powerbi_validation"] += time.perf_counter() - stage_start
             successful_files[file_path.name] = (ingestion_result.dataframe, profile)
         except IngestionError as exc:
             file_profiles[file_path.name] = {"status": "failed", "reason": exc.reason}
@@ -139,12 +170,18 @@ def analyze_run(request: AnalyzeRequest) -> dict:
         )
 
     if successful_files:
+        stage_start = time.perf_counter()
         relationship_checks = assess_relationships(successful_files)
         for filename, check in relationship_checks.items():
             file_powerbi[filename]["checks"].append(check.to_dict())
             file_powerbi[filename]["score"] = compute_score(
                 [PowerBICheck(**c) for c in file_powerbi[filename]["checks"]]
             )
+        stage_totals["powerbi_validation"] += time.perf_counter() - stage_start
+
+    for stage, seconds in stage_totals.items():
+        accumulate_processing_time(run_dir, stage, seconds)
+        log_stage(settings.logs_dir, request.run_id, stage, seconds)
 
     powerbi_result = {
         "run_id": request.run_id,

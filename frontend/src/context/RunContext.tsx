@@ -13,6 +13,7 @@ interface RunResults {
   lineage: any;
   beforeAfter: any;
   dictionary: any;
+  performance: any;
 }
 
 interface RunContextValue {

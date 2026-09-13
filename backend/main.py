@@ -16,6 +16,7 @@ from app.api.drift import router as drift_router
 from app.api.health import router as health_router
 from app.api.issues import router as issues_router
 from app.api.lineage import router as lineage_router
+from app.api.performance import router as performance_router
 from app.api.powerbi import router as powerbi_router
 from app.api.quality import router as quality_router
 from app.api.report import router as report_router
@@ -54,6 +55,7 @@ app.include_router(before_after_router, prefix="/api")
 app.include_router(dictionary_router, prefix="/api")
 app.include_router(download_router, prefix="/api")
 app.include_router(validate_router, prefix="/api")
+app.include_router(performance_router, prefix="/api")
 
 
 @app.get("/health")

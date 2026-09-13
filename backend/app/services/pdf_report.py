@@ -280,6 +280,14 @@ def generate_pdf_report(run_dir: Path, run_id: str) -> bytes:
     if processing_times:
         rows = [[stage, f"{seconds:.4f}s"] for stage, seconds in processing_times.items()]
         story.append(_table(["Stage", "Processing Time"], rows))
+    bottleneck_stage = run_metadata.get("bottleneck_stage")
+    if bottleneck_stage:
+        story.append(
+            Paragraph(
+                f"Slowest stage: {bottleneck_stage} ({run_metadata.get('bottleneck_seconds', 0):.4f}s)",
+                styles["Normal"],
+            )
+        )
     for filename in filenames:
         file_meta = run_metadata.get("files", {}).get(filename, {})
         story.append(

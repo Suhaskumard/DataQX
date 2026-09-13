@@ -8,6 +8,7 @@ import {
   getDrift,
   getIssues,
   getLineage,
+  getPerformance,
   getPowerBiReadiness,
   getQuality,
   uploadDataset,
@@ -58,7 +59,7 @@ export default function Upload() {
       setStep("validating");
       const validateResult = await validateRun(runId);
 
-      const [issues, quality, powerbi, drift, lineage, beforeAfter, dictionary] = await Promise.all([
+      const [issues, quality, powerbi, drift, lineage, beforeAfter, dictionary, performance] = await Promise.all([
         getIssues(runId),
         getQuality(runId),
         getPowerBiReadiness(runId),
@@ -66,6 +67,7 @@ export default function Upload() {
         getLineage(runId),
         getBeforeAfter(runId),
         getDictionary(runId),
+        getPerformance(runId),
       ]);
 
       setRun({
@@ -81,6 +83,7 @@ export default function Upload() {
         lineage,
         beforeAfter,
         dictionary,
+        performance,
       });
       setStep("done");
       navigate("/");

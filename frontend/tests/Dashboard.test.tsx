@@ -26,6 +26,11 @@ const MOCK_RUN = {
   quality: { files: { "sales.csv": { after: { overall_score: 87 } } } },
   powerbi: { files: { "sales.csv": { score: 73 } } },
   drift: { files: { "sales.csv": { overall_status: "no_history" } } },
+  performance: {
+    processing_time_seconds: { upload: 0.01, analyze: 0.25, clean: 0.12, validate: 0.05 },
+    bottleneck_stage: "analyze",
+    bottleneck_seconds: 0.25,
+  },
 };
 
 function Seed({ children }: { children: React.ReactNode }) {
@@ -67,6 +72,14 @@ describe("Dashboard with an active run", () => {
     renderWithRun();
     expect(screen.getByText("sales.csv")).toBeInTheDocument();
     expect(screen.getByText("Published")).toBeInTheDocument();
+  });
+
+  it("renders real per-stage performance timings and the bottleneck (Phase 21)", () => {
+    renderWithRun();
+    expect(screen.getByText("Performance")).toBeInTheDocument();
+    expect(screen.getByText("0.2500")).toBeInTheDocument(); // analyze stage seconds
+    expect(screen.getByText(/Slowest stage:/)).toBeInTheDocument();
+    expect(screen.getAllByText("analyze").length).toBeGreaterThan(0);
   });
 
   it("computes review-required and critical-issue counts from real issue data", () => {

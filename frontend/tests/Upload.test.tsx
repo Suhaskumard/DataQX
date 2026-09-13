@@ -61,6 +61,12 @@ function mockFetchSequence() {
     if (url.includes("/api/dictionary/")) {
       return new Response(JSON.stringify({ files: { "data.csv": [] } }), { status: 200 });
     }
+    if (url.includes("/api/performance/")) {
+      return new Response(
+        JSON.stringify({ processing_time_seconds: { upload: 0.01 }, bottleneck_stage: null, bottleneck_seconds: null }),
+        { status: 200 },
+      );
+    }
     throw new Error(`Unexpected fetch: ${url}`);
   }) as any;
   return calls;
@@ -90,7 +96,7 @@ describe("Upload page", () => {
     await user.click(screen.getByRole("button", { name: /analyze dataset/i }));
 
     await waitFor(() => {
-      expect(calls.some((c) => c.includes("/api/dictionary/"))).toBe(true);
+      expect(calls.some((c) => c.includes("/api/performance/"))).toBe(true);
     });
 
     const orderedRelevant = calls.filter((c) =>

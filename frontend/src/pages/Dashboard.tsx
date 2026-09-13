@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import DataTable from "../components/DataTable";
 import StatCard from "../components/StatCard";
 import { useRun } from "../context/RunContext";
 import { reportUrl } from "../services/api";
@@ -49,6 +50,9 @@ export default function Dashboard() {
   const qualityFile = run.quality.files[filename];
   const powerbiFile = run.powerbi.files[filename];
   const driftFile = run.drift.files[filename];
+  const performanceTimes: Record<string, number> = run.performance?.processing_time_seconds ?? {};
+  const bottleneckStage: string | null = run.performance?.bottleneck_stage ?? null;
+  const bottleneckSeconds: number | null = run.performance?.bottleneck_seconds ?? null;
 
   const issuesDetected = fileIssues.length;
   const issuesFixed = cleanFile.status === "cleaned" ? cleanFile.log.length : 0;
@@ -98,6 +102,30 @@ export default function Dashboard() {
           </p>
         </div>
       </div>
+
+      {Object.keys(performanceTimes).length > 0 && (
+        <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Performance</p>
+            {bottleneckStage && (
+              <p className="text-xs text-slate-500">
+                Slowest stage: <span className="font-semibold text-slate-700">{bottleneckStage}</span> (
+                {bottleneckSeconds?.toFixed(4)}s)
+              </p>
+            )}
+          </div>
+          <DataTable
+            columns={[
+              { key: "stage", label: "Stage" },
+              { key: "seconds", label: "Seconds" },
+            ]}
+            rows={Object.entries(performanceTimes).map(([stage, seconds]) => ({
+              stage,
+              seconds: seconds.toFixed(4),
+            }))}
+          />
+        </div>
+      )}
 
       <div className="flex gap-3">
         <a
