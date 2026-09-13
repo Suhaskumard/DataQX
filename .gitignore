@@ -1,0 +1,47 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Node / Frontend ---
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.local
+
+# --- Editor / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- DataQX generated artifacts (file-based, ephemeral) ---
+# Keep folder structure via .gitkeep; ignore only the generated contents.
+data/temp/*
+!data/temp/.gitkeep
+
+data/output/*
+!data/output/.gitkeep
+
+reports/runs/*
+!reports/runs/.gitkeep
+
+reports/history/*
+!reports/history/.gitkeep
+
+reports/*.pdf
+reports/*.json
+reports/*.csv
+
+logs/*
+!logs/.gitkeep
+
+# Never ignore original/raw input datasets or curated sample datasets.
+!data/input/
+!data/samples/
