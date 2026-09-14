@@ -60,3 +60,6 @@ INFO:     127.0.0.1:61111 - "GET /api/dictionary/run_20260914_091420_273325d2 HT
 INFO:     127.0.0.1:54102 - "GET /api/audit/run_20260914_091420_273325d2 HTTP/1.1" 200 OK
 INFO:     127.0.0.1:63705 - "GET /api/performance/run_20260914_091420_273325d2 HTTP/1.1" 200 OK
 INFO:     127.0.0.1:49814 - "GET /api/download/run_20260914_091420_273325d2/data_dictionary.csv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61656 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61659 - "GET /api/download?run_id=run_20260914_091420_273325d2&file=manual_corrupted_check.csv&artifact=data_dictionary HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61663 - "GET /api/download/run_20260914_091420_273325d2/data_dictionary.csv HTTP/1.1" 200 OK

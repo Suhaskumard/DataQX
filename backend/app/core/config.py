@@ -38,6 +38,18 @@ class Settings:
 
     max_upload_size_mb: int = field(default_factory=lambda: int(os.environ.get("DATAQX_MAX_UPLOAD_MB", "200")))
 
+    # Comma-separated list of allowed frontend origins (e.g. a Vercel deployment URL).
+    # Defaults to the local Vite dev server so `npm run dev` keeps working out of the box.
+    cors_origins: tuple[str, ...] = field(
+        default_factory=lambda: tuple(
+            origin.strip()
+            for origin in os.environ.get(
+                "DATAQX_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+            ).split(",")
+            if origin.strip()
+        )
+    )
+
 
 def get_settings() -> Settings:
     return Settings()

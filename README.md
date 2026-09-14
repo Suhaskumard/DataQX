@@ -86,6 +86,34 @@ cd frontend && npm run test
 cd frontend && npm run test:e2e   # real Playwright browser test against both live servers
 ```
 
+## Deployment
+
+DataQX deploys as two independent services — no database, no Docker, same architecture
+rules as local dev. The backend's filesystem writes (`data/`, `reports/`, `logs/`) work
+on Render's ephemeral disk since every run is self-contained under a `run_id`; artifacts
+just don't survive a redeploy/restart, matching the stateless design.
+
+**Backend → Render** (`render.yaml` at the repo root defines this as a Blueprint):
+1. Create a new Web Service from this repo (or "New +" → "Blueprint" to pick up
+   `render.yaml` automatically).
+2. Root directory: `backend`. Build command: `pip install -r requirements.txt`. Start
+   command: `uvicorn main:app --host 0.0.0.0 --port $PORT`.
+3. Set `DATAQX_CORS_ORIGINS` to your Vercel frontend URL(s) (comma-separated if there's
+   more than one, e.g. a preview + production domain). See `backend/.env.example`.
+4. Health check path: `/health`.
+
+**Frontend → Vercel:**
+1. Import this repo as a project; set root directory to `frontend`.
+2. Framework preset: Vite. Build command: `npm run build`. Output directory: `dist`.
+3. Set `VITE_API_BASE_URL` to your Render backend URL (e.g.
+   `https://dataqx-backend.onrender.com`, no trailing slash). See
+   `frontend/.env.example`.
+4. `frontend/vercel.json` rewrites all paths to `index.html` so React Router's
+   client-side routes (e.g. a hard refresh on `/dashboard`) resolve correctly.
+
+Deploy the backend first so you have its URL to give the frontend; a code change to
+either service redeploys independently of the other.
+
 ## Development Status
 
 Implemented in phases, verified end-to-end before moving forward (see `DATAQX.pdf` §64–66
@@ -139,8 +167,14 @@ for the mandated PLAN → IMPLEMENT → TEST → VERIFY workflow).
       Report / Validation Report links (all 9 of S69's required downloads now
       present); and added `test_final_validation.py`, which drives the real sample
       datasets through the complete workflow and confirms every S67 artifact exists,
-      is non-empty, and is downloadable through the real API. *(current — final
-      phase)*
+      is non-empty, and is downloadable through the real API.
+- [x] **Phase 25 — Deployment Readiness**: backend CORS origins and frontend API base
+      URL are now environment-driven (`DATAQX_CORS_ORIGINS`, `VITE_API_BASE_URL`) instead
+      of hardcoded to `localhost`, so the same code runs locally and in production; added
+      `render.yaml` (backend web service, `/health` check, `uvicorn main:app --host 0.0.0.0
+      --port $PORT`) and `frontend/vercel.json` (SPA rewrite so client-side routes survive
+      a hard refresh); added `.env.example` files for both apps documenting every runtime
+      variable. *(current — final phase)*
 
 ## Final QA Checklist
 

@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 function formatErrorDetail(detail: unknown, status: number): string {
   if (typeof detail === "string" && detail) return detail;
