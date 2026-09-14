@@ -55,6 +55,43 @@ def test_parse_empty_template_yields_empty_lists():
     assert plan.required_columns == []
 
 
+def test_header_with_trailing_colon_still_matches():
+    plan_text = """# Project Plan
+
+## Required Columns:
+- customer_id
+
+## Columns That Must Not Be Modified:
+- legacy_code
+"""
+    plan = parse_project_plan(plan_text)
+    assert plan.required_columns == ["customer_id"]
+    assert plan.protected_columns == ["legacy_code"]
+
+
+def test_bulleted_objective_is_not_silently_dropped():
+    plan_text = """# Project Plan
+
+## Project Objective
+- Prepare data for dashboard
+- Focus on Q1
+"""
+    plan = parse_project_plan(plan_text)
+    assert plan.objective == "Prepare data for dashboard Focus on Q1"
+
+
+def test_load_project_plan_falls_back_to_cp1252_on_non_utf8_file(tmp_path):
+    # A plan pasted from Word often contains a right single quotation mark (U+2019),
+    # which in cp1252 encodes as byte 0x92 -- invalid as UTF-8.
+    plan_text = "# Project Plan\n\n## Project Objective\nClient’s Q1 dashboard prep.\n"
+    (tmp_path / "project_plan.md").write_bytes(plan_text.encode("cp1252"))
+
+    plan = load_project_plan(tmp_path)
+
+    assert plan is not None
+    assert "Q1 dashboard prep" in plan.objective
+
+
 def test_load_project_plan_returns_none_when_file_missing(tmp_path):
     assert load_project_plan(tmp_path) is None
 
@@ -79,6 +116,17 @@ def test_check_required_columns_flags_missing_column():
 
 def test_check_required_columns_no_issue_when_all_present():
     df = pd.DataFrame({"customer_id": [1], "order_date": ["2024-01-01"], "revenue": [100]})
+    plan = parse_project_plan(SAMPLE_PLAN)
+
+    issues = check_required_columns(df, plan)
+
+    assert issues == []
+
+
+def test_check_required_columns_matches_case_and_whitespace_insensitively():
+    # SAMPLE_PLAN requires customer_id, order_date, revenue (lowercase, exact) --
+    # a dataframe with differently-cased real columns must still satisfy the plan.
+    df = pd.DataFrame({"Customer_ID": [1], "Order_Date": ["2024-01-01"], "REVENUE": [100]})
     plan = parse_project_plan(SAMPLE_PLAN)
 
     issues = check_required_columns(df, plan)

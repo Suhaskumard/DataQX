@@ -24,8 +24,9 @@ from app.services.ingestion import IngestionError, load_dataset
 from app.services.issue_detection import detect_issues
 from app.services.lineage import build_lineage
 from app.services.performance_logging import log_stage
+from app.services.analytics_readiness import evaluate_analytics_readiness
 from app.services.pipeline_cache import load_cache_entry, save_cache_entry
-from app.services.powerbi import assess_single_file_readiness
+from app.services.platform_rules.common import PlatformCheck, compute_score, status_from_checks
 from app.services.profiling import profile_dataset
 from app.services.project_plan import load_project_plan
 from app.services.quality_score import compute_quality_score
@@ -37,6 +38,7 @@ from app.services.run_metadata import (
     update_run_metadata,
 )
 from app.utils.filesystem import get_run_dir, safe_join
+from app.utils.json_safe import sanitize_for_json
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -78,6 +80,7 @@ def clean_run(request: CleanRequest) -> dict:
     metadata_files: dict[str, dict] = {}
     file_quality: dict[str, dict] = {}
     file_before_after: dict[str, dict] = {}
+    file_analytics_readiness_after: dict[str, dict] = {}
     all_dictionary_rows: list[dict] = []
     any_rolled_back = False
     stage_totals = {"file_loading": 0.0, "profiling": 0.0, "issue_detection": 0.0, "output_generation": 0.0}
@@ -88,7 +91,7 @@ def clean_run(request: CleanRequest) -> dict:
             stage_totals["file_loading"] += time.perf_counter() - stage_start
 
             stage_start = time.perf_counter()
-            cached = load_cache_entry(run_dir, file_path.name)
+            cached = load_cache_entry(run_dir, file_path)
             if cached is not None:
                 profile, issues = cached
                 stage_totals["profiling"] += time.perf_counter() - stage_start
@@ -101,12 +104,12 @@ def clean_run(request: CleanRequest) -> dict:
                 issues = detect_issues(ingestion_result.dataframe, profile)
                 stage_totals["issue_detection"] += time.perf_counter() - stage_start
 
-                save_cache_entry(run_dir, file_path.name, profile, issues)
+                save_cache_entry(run_dir, file_path, profile, issues)
 
             cleaning_result = apply_cleaning(ingestion_result.dataframe, issues, protected_columns=protected_columns)
 
             audit_rows, cleaning_rows = build_log_rows(
-                request.run_id, file_path.name, issues, cleaning_result.log
+                request.run_id, file_path.name, issues, cleaning_result.log, cleaning_result.protected_skips
             )
             all_audit_rows.extend(audit_rows)
             all_cleaning_rows.extend(cleaning_rows)
@@ -129,14 +132,15 @@ def clean_run(request: CleanRequest) -> dict:
             cleaned_df = cleaning_result.cleaned_df
             after_profile = profile_dataset(cleaned_df)
             after_issues = detect_issues(cleaned_df, after_profile)
-            before_powerbi = assess_single_file_readiness(ingestion_result.dataframe, profile, issues)
-            after_powerbi = assess_single_file_readiness(cleaned_df, after_profile, after_issues)
+            before_readiness = evaluate_analytics_readiness(ingestion_result.dataframe, profile, issues)
+            after_readiness = evaluate_analytics_readiness(cleaned_df, after_profile, after_issues)
+            file_analytics_readiness_after[file_path.name] = after_readiness.to_dict()
 
             before_quality = compute_quality_score(
-                ingestion_result.dataframe, profile, issues, None, before_powerbi.score
+                ingestion_result.dataframe, profile, issues, None, before_readiness.overall_score
             )
             after_quality = compute_quality_score(
-                cleaned_df, after_profile, after_issues, gate.validation_report, after_powerbi.score
+                cleaned_df, after_profile, after_issues, gate.validation_report, after_readiness.overall_score
             )
             file_quality[file_path.name] = {
                 "before": before_quality.to_dict(),
@@ -145,14 +149,19 @@ def clean_run(request: CleanRequest) -> dict:
             }
 
             before_snapshot = build_snapshot_metrics(
-                ingestion_result.dataframe, profile, issues, before_quality.overall_score, before_powerbi.score
+                ingestion_result.dataframe, profile, issues, before_quality.overall_score, before_readiness.overall_score
             )
             after_snapshot = build_snapshot_metrics(
-                cleaned_df, after_profile, after_issues, after_quality.overall_score, after_powerbi.score
+                cleaned_df, after_profile, after_issues, after_quality.overall_score, after_readiness.overall_score
             )
             file_before_after[file_path.name] = build_before_after_summary(before_snapshot, after_snapshot)
 
-            dictionary_rows = build_data_dictionary(after_profile, lineage_entries, cleaning_result.log)
+            platform_field_roles = {
+                name: platform_result.field_roles for name, platform_result in after_readiness.platforms.items()
+            }
+            dictionary_rows = build_data_dictionary(
+                after_profile, lineage_entries, cleaning_result.log, platform_field_roles
+            )
             for row in dictionary_rows:
                 all_dictionary_rows.append({"dataset": file_path.name, **row})
 
@@ -200,7 +209,7 @@ def clean_run(request: CleanRequest) -> dict:
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "files": file_results,
     }
-    (run_dir / "cleaning_log.json").write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
+    (run_dir / "cleaning_log.json").write_text(json.dumps(sanitize_for_json(result), indent=2, default=str), encoding="utf-8")
 
     if all_cleaning_rows:
         pd.DataFrame(all_cleaning_rows).to_csv(run_dir / "cleaning_log.csv", index=False)
@@ -217,7 +226,7 @@ def clean_run(request: CleanRequest) -> dict:
         "files": file_lineage,
     }
     (run_dir / "data_lineage.json").write_text(
-        json.dumps(lineage_result, indent=2, default=str), encoding="utf-8"
+        json.dumps(sanitize_for_json(lineage_result), indent=2, default=str), encoding="utf-8"
     )
     if all_lineage_rows:
         pd.DataFrame(all_lineage_rows).to_csv(run_dir / "data_lineage.csv", index=False)
@@ -229,7 +238,7 @@ def clean_run(request: CleanRequest) -> dict:
             "files": rollback_reports,
         }
         (run_dir / "rollback_report.json").write_text(
-            json.dumps(rollback_result, indent=2, default=str), encoding="utf-8"
+            json.dumps(sanitize_for_json(rollback_result), indent=2, default=str), encoding="utf-8"
         )
 
     quality_result = {
@@ -238,7 +247,7 @@ def clean_run(request: CleanRequest) -> dict:
         "files": file_quality,
     }
     (run_dir / "quality_report.json").write_text(
-        json.dumps(quality_result, indent=2, default=str), encoding="utf-8"
+        json.dumps(sanitize_for_json(quality_result), indent=2, default=str), encoding="utf-8"
     )
 
     before_after_result = {
@@ -247,8 +256,55 @@ def clean_run(request: CleanRequest) -> dict:
         "files": file_before_after,
     }
     (run_dir / "before_after_summary.json").write_text(
-        json.dumps(before_after_result, indent=2, default=str), encoding="utf-8"
+        json.dumps(sanitize_for_json(before_after_result), indent=2, default=str), encoding="utf-8"
     )
+
+    # The Analytics Readiness snapshot written by /api/analyze reflects the raw,
+    # pre-cleaning data and is never touched again by default -- once cleaning
+    # publishes an improved dataset, every other view of "current" readiness
+    # (Dashboard, the Analytics Readiness page, the PDF report) must stop showing
+    # that stale pre-clean score instead of silently disagreeing with the correct,
+    # freshly-computed "after" figure already shown on Before/After.
+    if file_analytics_readiness_after:
+        readiness_path = run_dir / "analytics_readiness.json"
+        existing_readiness = (
+            json.loads(readiness_path.read_text(encoding="utf-8")) if readiness_path.exists() else {"files": {}}
+        )
+        existing_files = existing_readiness.get("files", {})
+        for filename, after_result in file_analytics_readiness_after.items():
+            existing_platforms = existing_files.get(filename, {}).get("platforms", {})
+            for platform_name, after_platform in after_result["platforms"].items():
+                # Cross-file relationship checks depend on data this endpoint doesn't
+                # recompute here (every file in the run, not just this one) and aren't
+                # affected by column-level cleaning of a protected join key -- carry
+                # them forward from the analyze-stage snapshot instead of dropping them.
+                preserved_relationship_checks = [
+                    c for c in existing_platforms.get(platform_name, {}).get("checks", [])
+                    if c.get("check_name") == "foreign_key_relationships"
+                ]
+                if preserved_relationship_checks:
+                    merged_checks = [PlatformCheck(**c) for c in after_platform["checks"] + preserved_relationship_checks]
+                    after_platform["checks"] = [c.to_dict() for c in merged_checks]
+                    after_platform["score"] = compute_score(merged_checks)
+                    after_platform["status"] = status_from_checks(merged_checks)
+                    after_platform["passed_checks"] = [c.to_dict() for c in merged_checks if c.status == "pass"]
+                    after_platform["warnings"] = [c.to_dict() for c in merged_checks if c.status == "warning"]
+                    after_platform["critical_issues"] = [c.to_dict() for c in merged_checks if c.status == "fail"]
+            after_result["overall_score"] = round(
+                sum(p["score"] for p in after_result["platforms"].values()) / len(after_result["platforms"])
+            )
+            existing_files[filename] = after_result
+        existing_readiness["files"] = existing_files
+        existing_readiness["run_id"] = request.run_id
+        existing_readiness["timestamp"] = result["timestamp"]
+        readiness_path.write_text(
+            json.dumps(sanitize_for_json(existing_readiness), indent=2, default=str), encoding="utf-8"
+        )
+
+        overall_analytics_readiness_score = round(
+            sum(f["overall_score"] for f in existing_files.values()) / len(existing_files)
+        )
+        update_run_metadata(run_dir, analytics_readiness=overall_analytics_readiness_score)
     before_after_rows = [
         {"dataset": dataset, "metric": metric, **values}
         for dataset, metrics in file_before_after.items()

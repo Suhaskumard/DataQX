@@ -6,11 +6,15 @@ from app.services.quality_score import compute_quality_score
 from app.services.validation import validate_dataset
 
 
-def _compute(df: pd.DataFrame, powerbi_score: float = 100.0):
+def _compute(df: pd.DataFrame, analytics_readiness_score: float = 100.0):
     profile = profile_dataset(df)
     issues = detect_issues(df, profile)
     validation_report = validate_dataset(df)
-    return compute_quality_score(df, profile, issues, validation_report, powerbi_score), profile, issues
+    return (
+        compute_quality_score(df, profile, issues, validation_report, analytics_readiness_score),
+        profile,
+        issues,
+    )
 
 
 def test_clean_dataset_scores_near_100_on_every_dimension():
@@ -58,11 +62,11 @@ def test_constant_column_reduces_schema_quality_dimension():
     assert result.dimensions["schema_quality"] == 90.0
 
 
-def test_powerbi_score_passed_through_directly():
+def test_analytics_readiness_score_passed_through_directly():
     df = pd.DataFrame({"id": range(1, 11)})
-    result, _, _ = _compute(df, powerbi_score=42.0)
+    result, _, _ = _compute(df, analytics_readiness_score=42.0)
 
-    assert result.dimensions["powerbi_readiness"] == 42.0
+    assert result.dimensions["analytics_readiness"] == 42.0
 
 
 def test_methodology_contains_real_formula_strings_for_every_dimension():

@@ -30,6 +30,7 @@ from app.services.run_metadata import (
 )
 from app.services.validation import validate_dataset
 from app.utils.filesystem import get_run_dir, safe_join
+from app.utils.json_safe import sanitize_for_json
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -65,7 +66,7 @@ def validate_run(request: ValidateRequest) -> dict:
             stage_totals["file_loading"] += time.perf_counter() - stage_start
 
             stage_start = time.perf_counter()
-            cached = load_cache_entry(run_dir, file_path.name)
+            cached = load_cache_entry(run_dir, file_path)
             if cached is not None:
                 profile, issues = cached
                 stage_totals["profiling"] += time.perf_counter() - stage_start
@@ -78,7 +79,7 @@ def validate_run(request: ValidateRequest) -> dict:
                 issues = detect_issues(ingestion_result.dataframe, profile)
                 stage_totals["issue_detection"] += time.perf_counter() - stage_start
 
-                save_cache_entry(run_dir, file_path.name, profile, issues)
+                save_cache_entry(run_dir, file_path, profile, issues)
 
             cleaning_result = apply_cleaning(ingestion_result.dataframe, issues)
             report = validate_dataset(cleaning_result.cleaned_df)
@@ -100,7 +101,7 @@ def validate_run(request: ValidateRequest) -> dict:
         "files": file_results,
     }
     (run_dir / "validation_report.json").write_text(
-        json.dumps(result, indent=2, default=str), encoding="utf-8"
+        json.dumps(sanitize_for_json(result), indent=2, default=str), encoding="utf-8"
     )
 
     update_run_metadata(run_dir, status="validated")

@@ -19,6 +19,21 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
     },
+    {
+      name: "firefox",
+      use: { ...devices["Desktop Firefox"] },
+    },
+    {
+      name: "webkit",
+      use: { ...devices["Desktop Safari"] },
+    },
+    {
+      // Uses the real, system-installed Microsoft Edge binary (confirmed present
+      // at C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe) via
+      // Playwright's Chromium-based "msedge" channel -- not a separate download.
+      name: "msedge",
+      use: { ...devices["Desktop Edge"], channel: "msedge" },
+    },
   ],
   webServer: [
     {

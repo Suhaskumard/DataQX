@@ -99,13 +99,14 @@ def test_full_pipeline_upload_through_download_produces_every_artifact():
     assert drift_body["run_id"] == run_id
     assert DATASET_FILENAME in drift_body["files"]
 
-    # ---- Power BI readiness ----
-    powerbi_response = client.get(f"/api/powerbi/{run_id}")
-    assert powerbi_response.status_code == 200
-    powerbi_body = powerbi_response.json()
-    file_powerbi = powerbi_body["files"][DATASET_FILENAME]
-    assert isinstance(file_powerbi["score"], int)
-    assert 0 <= file_powerbi["score"] <= 100
+    # ---- Analytics readiness (Power BI is one of ten evaluated platforms) ----
+    readiness_response = client.get(f"/api/analytics-readiness/{run_id}")
+    assert readiness_response.status_code == 200
+    readiness_body = readiness_response.json()
+    file_readiness = readiness_body["files"][DATASET_FILENAME]
+    assert isinstance(file_readiness["overall_score"], int)
+    assert 0 <= file_readiness["overall_score"] <= 100
+    assert "power_bi" in file_readiness["platforms"]
 
     # ---- Data dictionary ----
     dictionary_response = client.get(f"/api/dictionary/{run_id}")
@@ -161,4 +162,4 @@ def test_full_pipeline_upload_through_download_produces_every_artifact():
     metadata = json.loads((settings.runs_dir / run_id / "run_metadata.json").read_text(encoding="utf-8"))
     assert metadata["run_id"] == run_id
     assert metadata["quality_score"] is not None
-    assert metadata["powerbi_readiness"] is not None
+    assert metadata["analytics_readiness"] is not None

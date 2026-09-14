@@ -84,6 +84,27 @@ def test_every_issue_produces_at_least_one_audit_row():
     assert audit_issue_types == detected_issue_types
 
 
+def test_protected_column_skip_produces_accurate_audit_row_not_low_confidence():
+    df = pd.DataFrame(
+        {
+            "id": range(1, 21),
+            "notes": ["  padded  "] + [f"clean text {i}" for i in range(19)],
+        }
+    )
+    profile = profile_dataset(df)
+    issues = detect_issues(df, profile)
+    cleaning_result = apply_cleaning(df, issues, protected_columns={"notes"})
+
+    audit_rows, cleaning_rows = build_log_rows(
+        "run_1", "data.csv", issues, cleaning_result.log, cleaning_result.protected_skips
+    )
+
+    whitespace_row = next(r for r in audit_rows if r["issue_type"] == "whitespace_formatting")
+    assert whitespace_row["status"] == "skipped_protected"
+    assert whitespace_row["confidence"] == "HIGH"  # real confidence, not a guessed LOW
+    assert whitespace_row not in cleaning_rows  # never actually applied
+
+
 def test_append_rows_to_csv_creates_then_appends(tmp_path):
     path = tmp_path / "audit_log.csv"
     rows_1 = [{col: f"r1_{col}" for col in AUDIT_COLUMNS}]
@@ -108,3 +129,30 @@ def test_append_rows_to_csv_noop_for_empty_rows(tmp_path):
     path = tmp_path / "audit_log.csv"
     append_rows_to_csv(path, [])
     assert not path.exists()
+
+
+def test_append_rows_to_csv_never_writes_header_twice_under_concurrent_writers(tmp_path):
+    """A TOCTOU race in the old exists()-then-open("a") header check let two
+    concurrent writers both decide "file doesn't exist yet" and both write a header
+    row. Simulates many concurrent writers hammering a fresh path."""
+    import threading
+
+    path = tmp_path / "concurrent_audit_log.csv"
+    row_template = {col: f"v_{col}" for col in AUDIT_COLUMNS}
+
+    def _write(n: int):
+        append_rows_to_csv(path, [{**row_template, "run_id": f"run_{n}"}])
+
+    threads = [threading.Thread(target=_write, args=(i,)) for i in range(20)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    with open(path, encoding="utf-8") as f:
+        header_count = sum(1 for line in f if line.startswith("timestamp,"))
+    assert header_count == 1
+
+    with open(path, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) == 20

@@ -21,12 +21,14 @@ from app.services.drift import detect_drift, find_previous_profile, save_profile
 from app.services.ingestion import IngestionError, load_dataset
 from app.services.issue_detection import detect_issues
 from app.services.performance_logging import log_stage
+from app.services.analytics_readiness import evaluate_analytics_readiness
 from app.services.pipeline_cache import load_cache_entry, save_cache_entry
-from app.services.powerbi import PowerBICheck, assess_relationships, assess_single_file_readiness, compute_score
+from app.services.platform_rules.relationships import assess_relationships
 from app.services.profiling import profile_dataset
 from app.services.project_plan import check_required_columns, load_project_plan
 from app.services.run_metadata import accumulate_processing_time, record_processing_time, update_run_metadata
 from app.utils.filesystem import get_run_dir, safe_join
+from app.utils.json_safe import sanitize_for_json
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -58,7 +60,7 @@ def analyze_run(request: AnalyzeRequest) -> dict:
     file_profiles: dict[str, dict] = {}
     file_issues: dict[str, list] = {}
     file_drift: dict[str, dict] = {}
-    file_powerbi: dict[str, dict] = {}
+    file_analytics_readiness: dict[str, dict] = {}
     all_drift_rows: list[dict] = []
     successful_files: dict[str, tuple] = {}
     stage_totals = {
@@ -66,7 +68,7 @@ def analyze_run(request: AnalyzeRequest) -> dict:
         "profiling": 0.0,
         "issue_detection": 0.0,
         "drift_detection": 0.0,
-        "powerbi_validation": 0.0,
+        "analytics_readiness": 0.0,
     }
     for file_path in raw_files:
         try:
@@ -75,7 +77,7 @@ def analyze_run(request: AnalyzeRequest) -> dict:
             stage_totals["file_loading"] += time.perf_counter() - stage_start
 
             stage_start = time.perf_counter()
-            cached = load_cache_entry(run_dir, file_path.name)
+            cached = load_cache_entry(run_dir, file_path)
             if cached is not None:
                 profile, base_issues = cached
                 stage_totals["profiling"] += time.perf_counter() - stage_start
@@ -88,7 +90,7 @@ def analyze_run(request: AnalyzeRequest) -> dict:
                 base_issues = detect_issues(ingestion_result.dataframe, profile)
                 stage_totals["issue_detection"] += time.perf_counter() - stage_start
 
-                save_cache_entry(run_dir, file_path.name, profile, base_issues)
+                save_cache_entry(run_dir, file_path, profile, base_issues)
 
             issues = base_issues
             if project_plan is not None:
@@ -129,10 +131,10 @@ def analyze_run(request: AnalyzeRequest) -> dict:
             stage_totals["drift_detection"] += time.perf_counter() - stage_start
 
             stage_start = time.perf_counter()
-            powerbi_report = assess_single_file_readiness(ingestion_result.dataframe, profile, issues)
-            file_powerbi[file_path.name] = powerbi_report.to_dict()
-            stage_totals["powerbi_validation"] += time.perf_counter() - stage_start
-            successful_files[file_path.name] = (ingestion_result.dataframe, profile)
+            readiness_result = evaluate_analytics_readiness(ingestion_result.dataframe, profile, issues)
+            file_analytics_readiness[file_path.name] = readiness_result.to_dict()
+            stage_totals["analytics_readiness"] += time.perf_counter() - stage_start
+            successful_files[file_path.name] = (ingestion_result.dataframe, profile, issues)
         except IngestionError as exc:
             file_profiles[file_path.name] = {"status": "failed", "reason": exc.reason}
         except Exception:
@@ -145,14 +147,14 @@ def analyze_run(request: AnalyzeRequest) -> dict:
         "timestamp": timestamp,
         "files": file_profiles,
     }
-    (run_dir / "profile.json").write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
+    (run_dir / "profile.json").write_text(json.dumps(sanitize_for_json(result), indent=2, default=str), encoding="utf-8")
 
     issues_result = {
         "run_id": request.run_id,
         "timestamp": timestamp,
         "files": file_issues,
     }
-    (run_dir / "issues.json").write_text(json.dumps(issues_result, indent=2, default=str), encoding="utf-8")
+    (run_dir / "issues.json").write_text(json.dumps(sanitize_for_json(issues_result), indent=2, default=str), encoding="utf-8")
 
     drift_result = {
         "run_id": request.run_id,
@@ -160,7 +162,7 @@ def analyze_run(request: AnalyzeRequest) -> dict:
         "files": file_drift,
     }
     (run_dir / "drift_report.json").write_text(
-        json.dumps(drift_result, indent=2, default=str), encoding="utf-8"
+        json.dumps(sanitize_for_json(drift_result), indent=2, default=str), encoding="utf-8"
     )
     if all_drift_rows:
         append_rows_to_csv(
@@ -171,33 +173,34 @@ def analyze_run(request: AnalyzeRequest) -> dict:
 
     if successful_files:
         stage_start = time.perf_counter()
-        relationship_checks = assess_relationships(successful_files)
+        relationship_checks = assess_relationships(
+            {name: (df, profile) for name, (df, profile, _issues) in successful_files.items()}
+        )
         for filename, check in relationship_checks.items():
-            file_powerbi[filename]["checks"].append(check.to_dict())
-            file_powerbi[filename]["score"] = compute_score(
-                [PowerBICheck(**c) for c in file_powerbi[filename]["checks"]]
-            )
-        stage_totals["powerbi_validation"] += time.perf_counter() - stage_start
+            df, profile, issues = successful_files[filename]
+            readiness_result = evaluate_analytics_readiness(df, profile, issues, relationship_check=check)
+            file_analytics_readiness[filename] = readiness_result.to_dict()
+        stage_totals["analytics_readiness"] += time.perf_counter() - stage_start
 
     for stage, seconds in stage_totals.items():
         accumulate_processing_time(run_dir, stage, seconds)
         log_stage(settings.logs_dir, request.run_id, stage, seconds)
 
-    powerbi_result = {
+    analytics_readiness_result = {
         "run_id": request.run_id,
         "timestamp": timestamp,
-        "files": file_powerbi,
+        "files": file_analytics_readiness,
     }
-    (run_dir / "powerbi_readiness.json").write_text(
-        json.dumps(powerbi_result, indent=2, default=str), encoding="utf-8"
+    (run_dir / "analytics_readiness.json").write_text(
+        json.dumps(sanitize_for_json(analytics_readiness_result), indent=2, default=str), encoding="utf-8"
     )
 
-    overall_powerbi_score = (
-        round(sum(f["score"] for f in file_powerbi.values()) / len(file_powerbi))
-        if file_powerbi else None
+    overall_analytics_readiness_score = (
+        round(sum(f["overall_score"] for f in file_analytics_readiness.values()) / len(file_analytics_readiness))
+        if file_analytics_readiness else None
     )
 
-    update_run_metadata(run_dir, status="profiled", powerbi_readiness=overall_powerbi_score)
+    update_run_metadata(run_dir, status="profiled", analytics_readiness=overall_analytics_readiness_score)
     record_processing_time(run_dir, "analyze", time.perf_counter() - start_time)
 
     return result

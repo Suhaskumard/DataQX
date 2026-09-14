@@ -31,14 +31,32 @@ def _cache_path(run_dir: Path) -> Path:
     return run_dir / _CACHE_FILENAME
 
 
-def load_cache_entry(run_dir: Path, filename: str) -> tuple[DatasetProfile, list[Issue]] | None:
+def _file_fingerprint(file_path: Path) -> dict:
+    """Cheap, no-read identity check for the raw input file (size + mtime)."""
+    stat = file_path.stat()
+    return {"size": stat.st_size, "mtime_ns": stat.st_mtime_ns}
+
+
+def load_cache_entry(run_dir: Path, file_path: Path) -> tuple[DatasetProfile, list[Issue]] | None:
+    """Returns the cached (profile, issues) for `file_path`, or None on a cache miss.
+
+    Defense-in-depth, not a currently-exploitable-through-the-API fix: every upload
+    gets a fresh run_id today, so `data/input/<run_id>/<filename>` is immutable for
+    the run's lifetime -- but this cache has no other integrity check of its own, and
+    silently-wrong output is the worst possible failure mode for a data-quality
+    product. A size/mtime mismatch against the file actually on disk invalidates the
+    entry (treated as a miss) rather than trusting a bare filename match forever.
+    """
     cache_path = _cache_path(run_dir)
     if not cache_path.exists():
         return None
 
     cache = json.loads(cache_path.read_text(encoding="utf-8"))
-    entry = cache.get(filename)
+    entry = cache.get(file_path.name)
     if entry is None:
+        return None
+
+    if entry.get("fingerprint") != _file_fingerprint(file_path):
         return None
 
     profile_dict = dict(entry["profile"])
@@ -60,11 +78,12 @@ def load_cache_entry(run_dir: Path, filename: str) -> tuple[DatasetProfile, list
     return profile, issues
 
 
-def save_cache_entry(run_dir: Path, filename: str, profile: DatasetProfile, issues: list[Issue]) -> None:
+def save_cache_entry(run_dir: Path, file_path: Path, profile: DatasetProfile, issues: list[Issue]) -> None:
     cache_path = _cache_path(run_dir)
     cache = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.exists() else {}
 
-    cache[filename] = {
+    cache[file_path.name] = {
+        "fingerprint": _file_fingerprint(file_path),
         "profile": profile.to_dict(),
         "issues": [issue.to_dict() for issue in issues],
     }

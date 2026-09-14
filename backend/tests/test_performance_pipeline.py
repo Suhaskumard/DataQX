@@ -44,7 +44,7 @@ def test_large_dataset_full_pipeline_produces_real_positive_stage_timings():
     expected_stages = [
         "upload", "analyze", "clean", "validate",
         "file_loading", "profiling", "issue_detection",
-        "drift_detection", "powerbi_validation", "output_generation",
+        "drift_detection", "analytics_readiness", "output_generation",
     ]
     for stage in expected_stages:
         assert stage in times, f"missing stage: {stage}"

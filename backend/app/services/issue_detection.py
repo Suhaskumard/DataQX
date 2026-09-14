@@ -25,7 +25,7 @@ _NUMERIC_LIKE_RE = re.compile(r"^-?\d+(\.\d+)?$")
 # MM/DD ambiguity. Dash-separated dates are excluded: a 4-digit first component
 # ("2023-06-15") is unambiguously ISO Y-M-D, and treating the day as an "ambiguous
 # first component" there is a false positive, not a real formatting inconsistency.
-_AMBIGUOUS_DATE_TOKEN_RE = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{4})$")
+_AMBIGUOUS_DATE_TOKEN_RE = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{2}|\d{4})$")
 
 
 @dataclass
@@ -226,9 +226,15 @@ def _detect_date_issues(df: pd.DataFrame, profile: DatasetProfile) -> list[Issue
 
         # Ambiguous format: some slash-dates clearly aren't DD/MM (or MM/DD) because
         # the day-or-month position exceeds 12, others are ambiguous because both the
-        # day and month positions are <= 12 (could be read either way).
+        # day and month positions are <= 12 (could be read either way). Tracked as two
+        # separate "unambiguous" buckets (DD/MM-only vs MM/DD-only) rather than one
+        # combined flag, so a column mixing "13/02/2024" (unambiguously DD/MM) with
+        # "02/13/2024" (unambiguously MM/DD) -- the clearest possible case of two
+        # contradictory conventions -- is caught even when no single value is itself
+        # ambiguous.
         non_null = df[column].dropna().astype(str)
-        has_unambiguous_slash_date = False
+        has_unambiguous_ddmm = False  # first component > 12 -> must be day -> DD/MM
+        has_unambiguous_mmdd = False  # second component > 12 -> must be day -> MM/DD
         has_ambiguous = False
         for val in non_null:
             m = _AMBIGUOUS_DATE_TOKEN_RE.match(val.strip())
@@ -236,12 +242,16 @@ def _detect_date_issues(df: pd.DataFrame, profile: DatasetProfile) -> list[Issue
                 continue
             day_or_month_a, day_or_month_b, _year = m.groups()
             a, b = int(day_or_month_a), int(day_or_month_b)
-            if a > 12 or b > 12:
-                has_unambiguous_slash_date = True
+            if a > 12:
+                has_unambiguous_ddmm = True
+            elif b > 12:
+                has_unambiguous_mmdd = True
             else:
                 has_ambiguous = True
 
-        if has_unambiguous_slash_date and has_ambiguous:
+        has_unambiguous_slash_date = has_unambiguous_ddmm or has_unambiguous_mmdd
+        contradictory_conventions = has_unambiguous_ddmm and has_unambiguous_mmdd
+        if (has_unambiguous_slash_date and has_ambiguous) or contradictory_conventions:
             issues.append(
                 Issue(
                     issue_type="ambiguous_date_format",
@@ -265,9 +275,18 @@ def _detect_impossible_values(df: pd.DataFrame) -> list[Issue]:
     issues = []
     for column in df.columns:
         series = df[column]
-        if not pd.api.types.is_numeric_dtype(series):
-            continue
-        non_null = series.dropna()
+        if pd.api.types.is_numeric_dtype(series):
+            numeric = series
+        else:
+            # A column can be object-dtype because of ONE unrelated non-numeric
+            # value (e.g. "abc" typo'd into an otherwise-numeric age column,
+            # already caught separately as its own mixed_data_types issue) --
+            # that must not silently mask range/sign checks on every other,
+            # perfectly numeric value still in the column.
+            numeric = pd.to_numeric(series, errors="coerce")
+            if numeric.notna().sum() == 0:
+                continue
+        non_null = numeric.dropna()
         if non_null.empty:
             continue
 

@@ -124,6 +124,19 @@ def test_profile_date_invalid_and_future_counts():
     assert result["max"] is not None
 
 
+def test_profile_date_survives_mixed_timezone_offsets_without_crashing():
+    """A column mixing timezone-naive and timezone-aware ISO-8601 strings can make
+    pandas fall back to object dtype instead of datetime64 -- reproducibly raises
+    AttributeError on `.dt.tz` before the fix. Must degrade gracefully, not crash
+    the whole file's analysis over one column."""
+    series = pd.Series(["2024-01-01T10:00:00+05:30", "2024-01-01T10:00:00+02:00", "2024-01-01"])
+
+    result = _profile_date(series)  # must not raise
+
+    assert result["invalid_count"] >= 0
+    assert isinstance(result["invalid_count"], int)
+
+
 # --- _profile_text --------------------------------------------------------------
 
 

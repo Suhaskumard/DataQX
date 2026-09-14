@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { useEffect } from "react";
 import DataDictionaryPage from "../src/pages/DataDictionaryPage";
@@ -25,22 +26,77 @@ function renderWithRun(run: any) {
   );
 }
 
+const MOCK_RUN = {
+  runId: "run_test_dict",
+  dictionary: {
+    files: {
+      "sales.csv": [
+        {
+          column_name: "customer_id",
+          data_type: "id",
+          description: "Id column, no missing values.",
+          missing_percentage: 0,
+          unique_count: 40,
+          example_values: "1; 2; 3",
+          cleaning_actions: "trimmed",
+          power_bi_role: "Key",
+          tableau_role: "Dimension",
+          sql_role: "Primary Key Candidate",
+        },
+        {
+          column_name: "revenue",
+          data_type: "float",
+          description: "Float column, no missing values.",
+          missing_percentage: 0,
+          unique_count: 40,
+          example_values: "100; 200",
+          cleaning_actions: null,
+          power_bi_role: "measure",
+          python_role: null,
+        },
+      ],
+    },
+  },
+};
+
 describe("DataDictionaryPage with an active run", () => {
   it("renders the real dictionary rows", () => {
-    renderWithRun({
-      runId: "run_test_dict",
-      dictionary: {
-        files: {
-          "sales.csv": [
-            { column_name: "customer_name", data_type: "string", description: "Customer full name", missing_percentage: 0, unique_count: 40, example_values: "Alice; Bob", cleaning_actions: "trimmed" },
-          ],
-        },
-      },
-    } as any);
+    renderWithRun(MOCK_RUN as any);
 
     expect(screen.getByText("sales.csv")).toBeInTheDocument();
-    expect(screen.getByText("customer_name")).toBeInTheDocument();
-    expect(screen.getByText("trimmed")).toBeInTheDocument();
+    expect(screen.getByText("customer_id")).toBeInTheDocument();
+  });
+
+  it("expands a row to reveal the real platform-role information (fixes the known UI gap)", async () => {
+    const user = userEvent.setup();
+    renderWithRun(MOCK_RUN as any);
+
+    await user.click(screen.getByText("customer_id"));
+
+    expect(screen.getByText("Key")).toBeInTheDocument();
+    expect(screen.getByText("Dimension")).toBeInTheDocument();
+    expect(screen.getByText("Primary Key Candidate")).toBeInTheDocument();
+  });
+
+  it("filters columns by platform relevance", async () => {
+    const user = userEvent.setup();
+    renderWithRun(MOCK_RUN as any);
+
+    const platformSelect = screen.getAllByRole("combobox")[1];
+    await user.selectOptions(platformSelect, "sql_role");
+
+    expect(screen.getByText("customer_id")).toBeInTheDocument();
+    expect(screen.queryByText("revenue")).not.toBeInTheDocument();
+  });
+
+  it("filters columns by search text", async () => {
+    const user = userEvent.setup();
+    renderWithRun(MOCK_RUN as any);
+
+    await user.type(screen.getByPlaceholderText("Search columns..."), "revenue");
+
+    expect(screen.getByText("revenue")).toBeInTheDocument();
+    expect(screen.queryByText("customer_id")).not.toBeInTheDocument();
   });
 });
 

@@ -40,6 +40,7 @@ async def upload_dataset(
     max_size_bytes = settings.max_upload_size_mb * 1024 * 1024
     results = []
     metadata_files: dict[str, dict] = {}
+    used_names: set[str] = set()
 
     for upload in files:
         original_name = upload.filename or "unnamed"
@@ -47,6 +48,19 @@ async def upload_dataset(
         try:
             safe_name = sanitize_filename(original_name)
             validate_extension(safe_name)
+            if safe_name in used_names:
+                # Two distinct original filenames can sanitize to the same safe name
+                # (e.g. "sales@2024.csv" and "sales#2024.csv" both -> "sales_2024.csv").
+                # Without disambiguation the second upload would silently overwrite the
+                # first on disk while both are reported as "saved" -- a silent data-loss
+                # bug. Suffix with an incrementing counter instead.
+                stem, _, suffix = safe_name.rpartition(".")
+                stem, suffix = (stem, f".{suffix}") if stem else (safe_name, "")
+                counter = 2
+                while f"{stem}_{counter}{suffix}" in used_names:
+                    counter += 1
+                safe_name = f"{stem}_{counter}{suffix}"
+            used_names.add(safe_name)
             dest_path = safe_join(input_dir, safe_name)
             size_bytes = save_upload_stream(upload.file, dest_path, max_size_bytes)
             input_hash = compute_file_hash(dest_path)
@@ -105,7 +119,7 @@ async def upload_dataset(
         project_plan=project_plan_result,
         files=metadata_files,
         quality_score=None,
-        powerbi_readiness=None,
+        analytics_readiness=None,
     )
     record_processing_time(run_dir, "upload", time.perf_counter() - start_time)
 

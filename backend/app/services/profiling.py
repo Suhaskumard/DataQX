@@ -172,9 +172,30 @@ def _profile_categorical(series: pd.Series) -> dict:
     }
 
 
+def _parse_dates_safely(series: pd.Series) -> pd.Series:
+    """Best-effort date parsing that never raises. A column mixing timezone-naive
+    and timezone-aware ISO-8601 strings can make pandas fall back to `object` dtype
+    instead of a proper datetime64 dtype (a real, reproducible case on the pinned
+    pandas version, not merely theoretical) -- normalize to UTC in that case so the
+    `.dt` accessor below stays usable. Any parse failure degrades to "everything
+    invalid" rather than crashing the whole file's analysis over one bad column."""
+    try:
+        parsed = pd.to_datetime(series, errors="coerce")
+    except Exception:
+        return pd.Series([pd.NaT] * len(series), index=series.index)
+
+    if len(parsed) and not pd.api.types.is_datetime64_any_dtype(parsed):
+        try:
+            parsed = pd.to_datetime(series, errors="coerce", utc=True)
+        except Exception:
+            return pd.Series([pd.NaT] * len(series), index=series.index)
+
+    return parsed
+
+
 def _profile_date(series: pd.Series) -> dict:
     non_null = series.dropna()
-    parsed = pd.to_datetime(non_null, errors="coerce")
+    parsed = _parse_dates_safely(non_null)
     invalid_count = int(parsed.isna().sum())
     valid = parsed.dropna()
     now = pd.Timestamp.now(tz=valid.dt.tz) if len(valid) and valid.dt.tz is not None else pd.Timestamp.now()

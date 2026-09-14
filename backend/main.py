@@ -10,7 +10,9 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api.analytics_readiness import router as analytics_readiness_router
 from app.api.analyze import router as analyze_router
+from app.api.audit import router as audit_router
 from app.api.before_after import router as before_after_router
 from app.api.clean import router as clean_router
 from app.api.dictionary import router as dictionary_router
@@ -20,7 +22,6 @@ from app.api.health import router as health_router
 from app.api.issues import router as issues_router
 from app.api.lineage import router as lineage_router
 from app.api.performance import router as performance_router
-from app.api.powerbi import router as powerbi_router
 from app.api.quality import router as quality_router
 from app.api.report import router as report_router
 from app.api.upload import router as upload_router
@@ -70,9 +71,10 @@ app.include_router(upload_router, prefix="/api")
 app.include_router(analyze_router, prefix="/api")
 app.include_router(issues_router, prefix="/api")
 app.include_router(clean_router, prefix="/api")
+app.include_router(audit_router, prefix="/api")
 app.include_router(drift_router, prefix="/api")
 app.include_router(lineage_router, prefix="/api")
-app.include_router(powerbi_router, prefix="/api")
+app.include_router(analytics_readiness_router, prefix="/api")
 app.include_router(report_router, prefix="/api")
 app.include_router(quality_router, prefix="/api")
 app.include_router(before_after_router, prefix="/api")

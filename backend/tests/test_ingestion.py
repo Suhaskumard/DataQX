@@ -95,7 +95,7 @@ def test_excel_skips_hidden_and_empty_sheets(tmp_path: Path):
     assert result.sheet_name == "Data"
     assert list(result.dataframe.columns) == ["id", "name"]
     assert len(result.dataframe) == 2
-    assert any("Empty" in w for w in result.warnings) or True  # empty sheet may be skipped silently or noted
+    assert any("Empty" in w for w in result.warnings)  # empty sheet is noted, not silently dropped
 
 
 # --- JSON ---------------------------------------------------------------------
@@ -169,6 +169,34 @@ def test_xml_parsed_correctly(tmp_path: Path):
 
     assert list(result.dataframe.columns) == ["id", "name"]
     assert len(result.dataframe) == 2
+
+
+# --- Encoding/robustness -------------------------------------------------------
+
+
+def test_undecodable_bytes_raise_friendly_ingestion_error_not_raw_crash(tmp_path: Path, monkeypatch):
+    # Force chardet to confidently misreport an encoding that cannot actually decode
+    # the bytes, simulating a low-confidence wrong guess -- must degrade to a friendly
+    # IngestionError, not an unhandled UnicodeDecodeError.
+    path = tmp_path / "bad_encoding.csv"
+    path.write_bytes(b"id,name\n1,\xff\xfe\x00\x01invalid\n")
+
+    import app.services.ingestion as ingestion_module
+
+    monkeypatch.setattr(ingestion_module.chardet, "detect", lambda _: {"encoding": "ascii", "confidence": 0.1})
+
+    with pytest.raises(IngestionError):
+        load_dataset(path)
+
+
+def test_deeply_nested_json_raises_friendly_error_not_recursion_error(tmp_path: Path):
+    path = tmp_path / "deep.json"
+    # Deep enough to blow Python's default recursion limit inside json.loads.
+    nested = "[" * 5000 + "]" * 5000
+    path.write_text(nested, encoding="utf-8")
+
+    with pytest.raises(IngestionError):
+        load_dataset(path)
 
 
 # --- Unsupported ----------------------------------------------------------------

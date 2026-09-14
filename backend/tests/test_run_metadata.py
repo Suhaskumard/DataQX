@@ -92,3 +92,27 @@ def test_derive_project_name_none_when_no_plan():
 def test_derive_project_name_none_when_no_objective():
     plan = parse_project_plan("# Plan\n\n## Required Columns\n- id\n")
     assert derive_project_name(plan) is None
+
+
+def test_write_run_metadata_is_atomic_no_temp_file_left_behind(tmp_path):
+    """write_run_metadata must write via a temp-file-then-replace so a crash mid-write
+    can never leave run_metadata.json truncated/corrupt."""
+    from app.services.run_metadata import write_run_metadata
+
+    write_run_metadata(tmp_path, {"run_id": "run_1"})
+
+    metadata_path = tmp_path / "run_metadata.json"
+    assert metadata_path.exists()
+    assert json.loads(metadata_path.read_text(encoding="utf-8"))["run_id"] == "run_1"
+    # No leftover .tmp file from the atomic-write helper.
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_read_run_metadata_recovers_from_corrupt_file_instead_of_raising(tmp_path):
+    """A truncated/corrupt run_metadata.json (e.g. from an old crash, before the
+    atomic-write fix existed) must degrade to an empty dict, not raise."""
+    from app.services.run_metadata import read_run_metadata
+
+    (tmp_path / "run_metadata.json").write_text('{"run_id": "run_1", "trunc', encoding="utf-8")
+
+    assert read_run_metadata(tmp_path) == {}

@@ -30,7 +30,7 @@ test("uploads a dataset and walks the full journey through every page", async ({
     { label: "Before vs After", heading: "Before vs After" },
     { label: "Data Lineage", heading: "Data Lineage" },
     { label: "Data Drift", heading: "Data Drift" },
-    { label: "Power BI Readiness", heading: "Power BI Readiness" },
+    { label: "Analytics Readiness", heading: "Analytics Readiness" },
     { label: "Data Dictionary", heading: "Data Dictionary" },
   ];
 

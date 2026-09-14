@@ -8,9 +8,10 @@ interface RunResults {
   validateResult: any;
   issues: any;
   quality: any;
-  powerbi: any;
+  analyticsReadiness: any;
   drift: any;
   lineage: any;
+  audit: any;
   beforeAfter: any;
   dictionary: any;
   performance: any;

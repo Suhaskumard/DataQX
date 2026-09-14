@@ -13,6 +13,7 @@ Two concerns not yet exercised anywhere else:
 import csv
 import io
 import random
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi.testclient import TestClient
 
@@ -105,3 +106,47 @@ def test_two_interleaved_runs_never_cross_contaminate_artifacts():
     validate_b = client.post("/api/validate", json={"run_id": run_id_b}).json()
     assert set(validate_a["files"].keys()) == {"concurrent_a.csv"}
     assert set(validate_b["files"].keys()) == {"concurrent_b.csv"}
+
+
+def test_genuinely_concurrent_uploads_never_cross_contaminate_or_corrupt_logs():
+    """Unlike the interleaved-sequential test above, this fires real concurrent
+    requests from multiple threads at once (ThreadPoolExecutor), probing the
+    Phase 25 concurrency fixes directly: append_rows_to_csv's header-write race and
+    run_metadata's atomic write. Each thread runs a full independent pipeline for
+    its own dataset; the only contract is zero cross-contamination and zero
+    corruption of the shared global audit_log.csv/cleaning_log.csv."""
+
+    def _run_one_pipeline(n: int) -> tuple[str, str]:
+        content = _generate_large_csv(300, seed=n)
+        filename = f"thread_dataset_{n}.csv"
+        upload = client.post("/api/upload", files={"files": (filename, content, "text/csv")})
+        assert upload.status_code == 200
+        run_id = upload.json()["run_id"]
+
+        assert client.post("/api/analyze", json={"run_id": run_id}).status_code == 200
+        assert client.post("/api/clean", json={"run_id": run_id}).status_code == 200
+        assert client.post("/api/validate", json={"run_id": run_id}).status_code == 200
+        return run_id, filename
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(_run_one_pipeline, range(8)))
+
+    settings = get_settings()
+    run_ids = {run_id for run_id, _ in results}
+    assert len(run_ids) == 8  # every thread got its own unique run_id, no collision
+
+    for run_id, filename in results:
+        input_files = {p.name for p in (settings.input_dir / run_id).iterdir()}
+        assert input_files == {filename}  # each run only ever sees its own file
+        metadata = (settings.runs_dir / run_id / "run_metadata.json").read_text(encoding="utf-8")
+        import json
+
+        assert json.loads(metadata)["run_id"] == run_id  # not corrupted, not another thread's data
+
+    # The shared global audit log must have exactly one header row despite 8
+    # concurrent writers all appending to it for the first time.
+    audit_log_path = settings.logs_dir / "audit_log.csv"
+    if audit_log_path.exists():
+        with open(audit_log_path, encoding="utf-8") as f:
+            header_count = sum(1 for line in f if line.startswith("timestamp,"))
+        assert header_count == 1

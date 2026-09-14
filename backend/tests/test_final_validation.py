@@ -80,9 +80,10 @@ def test_final_validation_full_workflow_every_artifact_and_real_issues():
     assert validate_response.json()["files"]["customers.csv"]["overall_status"] == "pass"
 
     # ---- Power BI / referential integrity: the real orphan (customer_id 999) ----
-    powerbi_response = client.get(f"/api/powerbi/{run_id}")
-    assert powerbi_response.status_code == 200
-    orders_checks = {c["check_name"]: c for c in powerbi_response.json()["files"]["orders.csv"]["checks"]}
+    readiness_response = client.get(f"/api/analytics-readiness/{run_id}")
+    assert readiness_response.status_code == 200
+    orders_powerbi = readiness_response.json()["files"]["orders.csv"]["platforms"]["power_bi"]
+    orders_checks = {c["check_name"]: c for c in orders_powerbi["checks"]}
     fk_check = orders_checks["foreign_key_relationships"]
     assert fk_check["status"] == "warning"
     assert fk_check["details"]["findings"]["customer_id"]["orphan_examples"] == ["999"]
@@ -147,4 +148,4 @@ def test_final_validation_full_workflow_every_artifact_and_real_issues():
     metadata = json.loads((run_dir / "run_metadata.json").read_text(encoding="utf-8"))
     assert metadata["run_id"] == run_id
     assert metadata["quality_score"] is not None
-    assert metadata["powerbi_readiness"] is not None
+    assert metadata["analytics_readiness"] is not None

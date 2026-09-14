@@ -173,6 +173,89 @@ def test_protected_column_is_never_modified_even_when_actionable():
     assert any(entry.column == "notes" for entry in result.log)
 
 
+def test_protected_column_matches_case_and_whitespace_insensitively():
+    """A plan protecting "Status" (or " status ") must still protect the real
+    column "status" -- exact-match comparison was silently defeating the entire
+    protection feature on the most common real-world mismatch."""
+    df = pd.DataFrame(
+        {
+            "id": range(1, 6),
+            "status": ["active", "active", "N/A", "active", "inactive"],
+        }
+    )
+    profile = profile_dataset(df)
+    issues = detect_issues(df, profile)
+
+    result = apply_cleaning(df, issues, protected_columns={" Status "})
+
+    assert result.cleaned_df.loc[2, "status"] == "N/A"
+    assert result.skipped_protected_columns >= 1
+
+
+def test_protected_column_skip_reports_real_confidence_not_low():
+    """A HIGH/MEDIUM-confidence issue withheld solely due to column protection must
+    not be mislabeled as a LOW-confidence "flag for review" in the audit trail --
+    the withholding reason is protection, not low confidence."""
+    df = pd.DataFrame(
+        {
+            "id": range(1, 21),
+            "notes": ["  padded  "] + [f"clean text {i}" for i in range(19)],
+        }
+    )
+    profile = profile_dataset(df)
+    issues = detect_issues(df, profile)
+
+    result = apply_cleaning(df, issues, protected_columns={"notes"})
+
+    whitespace_skip = next(s for s in result.protected_skips if s["issue_type"] == "whitespace_formatting")
+    assert whitespace_skip["confidence"] == "HIGH"
+    assert "protected" in whitespace_skip["reason"].lower()
+
+
+def test_affected_count_reflects_actual_changes_not_stale_issue_count():
+    """cleaning_log_entry.affected_count must reflect what the handler actually
+    changed (len(changes)), not the pre-cleaning Issue.affected_count, which can be
+    stale once an earlier cleaning step has already altered the working frame."""
+    df = pd.DataFrame(
+        {
+            "id": range(1, 21),
+            "notes": ["  padded  "] + [f"clean text {i}" for i in range(19)],
+        }
+    )
+    profile = profile_dataset(df)
+    issues = detect_issues(df, profile)
+    result = apply_cleaning(df, issues)
+
+    whitespace_entry = next(e for e in result.log if e.issue_type == "whitespace_formatting")
+    assert whitespace_entry.affected_count == len(whitespace_entry.changes) == 1
+
+
+def test_normalization_created_duplicates_are_removed_and_do_not_fail_validation():
+    """Two rows that differ only by whitespace become exact duplicates only after
+    whitespace normalization runs (which happens *after* the first dedup pass at
+    _CLEANING_ORDER priority 0). Without a second dedup pass, this row would survive
+    cleaning and validate_dataset would fail the whole file over it."""
+    from app.services.validation import validate_dataset
+
+    df = pd.DataFrame(
+        {
+            "name": ["Alice", "Alice ", "Bob"],  # rows 0/1 differ only by trailing space
+            "city": ["Springfield", "Springfield", "Shelbyville"],
+        }
+    )
+    profile = profile_dataset(df)
+    issues = detect_issues(df, profile)
+    result = apply_cleaning(df, issues)
+
+    assert len(result.cleaned_df) == 2  # the post-normalization duplicate was removed
+    assert any(
+        e.issue_type == "duplicate_rows" and e.rule == "duplicate_rows_post_normalization" for e in result.log
+    )
+
+    validation_report = validate_dataset(result.cleaned_df)
+    assert validation_report.overall_status != "fail"
+
+
 def test_clean_dataset_produces_no_log_entries():
     df = pd.DataFrame(
         {

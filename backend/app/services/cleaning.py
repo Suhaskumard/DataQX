@@ -56,6 +56,11 @@ class CleaningResult:
     log: list[CleaningLogEntry] = field(default_factory=list)
     skipped_low_confidence: int = 0
     skipped_protected_columns: int = 0
+    # Issues withheld solely because their column is protected -- kept separate from
+    # `log` (which only ever covers issues that were actually applied) so audit_logging
+    # can report the issue's real confidence/rule/reason instead of guessing LOW, per
+    # DATAQX.pdf S33's requirement that audit rows never contain misleading information.
+    protected_skips: list[dict] = field(default_factory=list)
 
 
 def _clean_whitespace(df: pd.DataFrame, issue: Issue) -> tuple[pd.DataFrame, list]:
@@ -147,16 +152,25 @@ _HANDLERS = {
 }
 
 
+def _normalize_column_name(name: str) -> str:
+    """Casefold+strip so protected/required column matching survives case and
+    whitespace differences between a project plan and real column names (a plan
+    protecting "Customer_ID" must still protect the real column "customer_id")."""
+    return name.strip().casefold()
+
+
 def apply_cleaning(
     df: pd.DataFrame,
     issues: list[Issue],
     protected_columns: set[str] | None = None,
 ) -> CleaningResult:
     protected_columns = protected_columns or set()
+    normalized_protected = {_normalize_column_name(c) for c in protected_columns}
     working = df.copy()
     log: list[CleaningLogEntry] = []
     skipped_low_confidence = 0
     skipped_protected_columns = 0
+    protected_skips: list[dict] = []
 
     actionable_issues = sorted(
         (issue for issue in issues if issue.issue_type in _CLEANING_ORDER),
@@ -172,8 +186,20 @@ def apply_cleaning(
     for issue in actionable_issues:
         # Explicit project requirements outrank confidence (DATAQX.pdf S12 priority
         # order): a protected column is never modified, no matter how safe the fix.
-        if issue.column in protected_columns:
+        if issue.column is not None and _normalize_column_name(issue.column) in normalized_protected:
             skipped_protected_columns += 1
+            decision = classify_issue(issue)
+            protected_skips.append(
+                {
+                    "issue_type": issue.issue_type,
+                    "column": issue.column,
+                    "confidence": decision.confidence,
+                    "rule": decision.rule,
+                    "reason": f"Column is protected by the project plan; withheld despite {decision.confidence} confidence ({decision.reason})",
+                    "action": "Skipped: column is protected by the project plan.",
+                    "severity": issue.severity,
+                }
+            )
             continue
 
         decision = classify_issue(issue)
@@ -190,7 +216,7 @@ def apply_cleaning(
                 column=issue.column,
                 confidence=decision.confidence,
                 action_taken=decision.action,
-                affected_count=issue.affected_count,
+                affected_count=len(changes),
                 rule=decision.rule,
                 reason=decision.reason,
                 changes=changes,
@@ -199,9 +225,45 @@ def apply_cleaning(
             )
         )
 
+    # A newly-emergent duplicate can appear only after whitespace/placeholder/category
+    # normalization collapses previously-distinct rows into identical ones (dedup itself
+    # already ran first, at _CLEANING_ORDER priority 0, and only catches duplicates that
+    # existed *before* normalization). Without this second pass, such rows survive
+    # cleaning and validate_dataset's duplicate check fails the whole file, triggering a
+    # rollback of data that was actually fully cleanable. Always re-checked (cheap: one
+    # `.duplicated()` call) rather than gated on whether an original `duplicate_rows`
+    # issue was detected, since the whole point is to catch duplicates that did NOT
+    # exist -- and so were never detected -- before normalization ran.
+    pre_rerun_row_count = len(working)
+    rerun_mask = working.duplicated(keep="first")
+    if rerun_mask.any():
+        new_duplicate_changes = [
+            {"row_index": int(idx), "original_value": "<duplicate row (post-normalization)>", "new_value": None}
+            for idx in working[rerun_mask].index
+        ]
+        working = working.drop_duplicates(keep="first").reset_index(drop=True)
+        log.append(
+            CleaningLogEntry(
+                issue_type="duplicate_rows",
+                column=None,
+                confidence="HIGH",
+                action_taken="Removed duplicate row(s) that only became identical after normalization.",
+                affected_count=len(new_duplicate_changes),
+                rule="duplicate_rows_post_normalization",
+                reason=(
+                    f"{pre_rerun_row_count - len(working)} row(s) became exact duplicates after "
+                    "whitespace/placeholder/category normalization and were removed."
+                ),
+                changes=new_duplicate_changes,
+                before_examples=[str(c["original_value"]) for c in new_duplicate_changes[:EXAMPLE_LIMIT]],
+                after_examples=[str(c["new_value"]) for c in new_duplicate_changes[:EXAMPLE_LIMIT]],
+            )
+        )
+
     return CleaningResult(
         cleaned_df=working,
         log=log,
         skipped_low_confidence=skipped_low_confidence,
         skipped_protected_columns=skipped_protected_columns,
+        protected_skips=protected_skips,
     )

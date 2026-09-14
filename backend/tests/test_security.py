@@ -153,3 +153,89 @@ def test_unhandled_exception_returns_generic_500(monkeypatch):
 
     assert error_log_path.exists()
     assert error_log_path.stat().st_size > size_before
+
+
+# --- Phase 25: additional adversarial attack vectors ----------------------------
+
+
+def test_url_encoded_traversal_in_filename_is_contained():
+    content = b"a,b\n1,2\n"
+    response = client.post(
+        "/api/upload",
+        files={"files": ("%2e%2e%2f%2e%2e%2fetc%2fpasswd.csv", content, "text/csv")},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    file_result = body["files"][0]
+    assert file_result["status"] == "saved"
+    settings = get_settings()
+    saved_path = settings.input_dir / body["run_id"] / file_result["saved_name"]
+    assert saved_path.parent == (settings.input_dir / body["run_id"])
+
+
+def test_unc_path_style_filename_is_contained():
+    content = b"a,b\n1,2\n"
+    response = client.post(
+        "/api/upload",
+        files={"files": (r"\attacker-server\share\evil.csv", content, "text/csv")},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    file_result = body["files"][0]
+    assert file_result["status"] == "saved"
+    settings = get_settings()
+    saved_path = settings.input_dir / body["run_id"] / file_result["saved_name"]
+    assert saved_path.parent == (settings.input_dir / body["run_id"])
+    assert "attacker-server" not in file_result["saved_name"]
+
+
+def test_windows_drive_relative_path_filename_is_contained():
+    content = b"a,b\n1,2\n"
+    response = client.post(
+        "/api/upload",
+        files={"files": (r"C:evil_relative.csv", content, "text/csv")},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    file_result = body["files"][0]
+    assert file_result["status"] == "saved"
+    settings = get_settings()
+    saved_path = settings.input_dir / body["run_id"] / file_result["saved_name"]
+    assert saved_path.parent == (settings.input_dir / body["run_id"])
+
+
+def test_null_byte_in_middle_of_extension_is_sanitized():
+    content = b"a,b\n1,2\n"
+    response = client.post(
+        "/api/upload",
+        files={"files": ("evil.csv\x00.php.csv", content, "text/csv")},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    file_result = body["files"][0]
+    assert "\x00" not in file_result.get("saved_name", "")
+
+
+def test_null_byte_at_start_of_filename_is_sanitized():
+    content = b"a,b\n1,2\n"
+    response = client.post(
+        "/api/upload",
+        files={"files": ("\x00evil.csv", content, "text/csv")},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    file_result = body["files"][0]
+    if file_result["status"] == "saved":
+        assert "\x00" not in file_result["saved_name"]
+
+
+def test_download_endpoint_rejects_encoded_traversal():
+    run_id = "run_does_not_matter_because_this_must_be_rejected"
+    response = client.get(f"/api/download/{run_id}/%2e%2e%2f%2e%2e%2fetc%2fpasswd")
+    assert response.status_code in (400, 404)
+
+
+def test_download_endpoint_rejects_unc_style_filename():
+    run_id = "run_does_not_matter_because_this_must_be_rejected"
+    response = client.get("/api/download/" + run_id + r"/\\attacker\share\file.csv")
+    assert response.status_code in (400, 404)

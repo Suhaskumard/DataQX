@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import io
 import json
+import math
 from pathlib import Path
+from xml.sax.saxutils import escape as _xml_escape
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import LETTER
@@ -40,6 +42,19 @@ _TABLE_STYLE = TableStyle(
 )
 
 
+def _esc(value) -> str:
+    """Escape a data-derived value for safe interpolation into a ReportLab
+    Paragraph. Paragraph text is parsed as a small XML-like markup language --
+    unescaped '&'/'<'/'>' in an ordinary filename or column name (e.g. "Sales &
+    Marketing.csv") otherwise raises a parse error instead of rendering literally.
+    None/NaN/Infinity render as "N/A" rather than the literal string "nan"."""
+    if value is None:
+        return "N/A"
+    if isinstance(value, float) and not math.isfinite(value):
+        return "N/A"
+    return _xml_escape(str(value))
+
+
 def _load_json(path: Path) -> dict | None:
     if not path.exists():
         return None
@@ -64,7 +79,7 @@ def generate_pdf_report(run_dir: Path, run_id: str) -> bytes:
     lineage_data = _load_json(run_dir / "data_lineage.json")
     drift_data = _load_json(run_dir / "drift_report.json")
     validation_data = _load_json(run_dir / "validation_report.json")
-    powerbi_data = _load_json(run_dir / "powerbi_readiness.json")
+    analytics_readiness_data = _load_json(run_dir / "analytics_readiness.json")
     quality_data = _load_json(run_dir / "quality_report.json")
     before_after_data = _load_json(run_dir / "before_after_summary.json")
 
@@ -79,22 +94,22 @@ def generate_pdf_report(run_dir: Path, run_id: str) -> bytes:
     story.append(Paragraph("DATAQX", styles["Title"]))
     story.append(Paragraph("DATA QUALITY &amp; CLEANING REPORT", styles["Heading2"]))
     story.append(Spacer(1, 0.5 * inch))
-    story.append(Paragraph(f"Project: {run_metadata.get('project_name') or 'N/A'}", styles["Normal"]))
-    story.append(Paragraph(f"Dataset(s): {', '.join(filenames) or 'N/A'}", styles["Normal"]))
-    story.append(Paragraph(f"Date: {run_metadata.get('timestamp', 'N/A')}", styles["Normal"]))
-    story.append(Paragraph(f"Run ID: {run_id}", styles["Normal"]))
+    story.append(Paragraph(f"Project: {_esc(run_metadata.get('project_name') or 'N/A')}", styles["Normal"]))
+    story.append(Paragraph(f"Dataset(s): {', '.join(_esc(f) for f in filenames) or 'N/A'}", styles["Normal"]))
+    story.append(Paragraph(f"Date: {_esc(run_metadata.get('timestamp', 'N/A'))}", styles["Normal"]))
+    story.append(Paragraph(f"Run ID: {_esc(run_id)}", styles["Normal"]))
     story.append(PageBreak())
 
     # --- Executive Summary -----------------------------------------------------
     story.append(Paragraph("Executive Summary", styles["Heading1"]))
     for filename in filenames:
-        story.append(Paragraph(filename, styles["Heading3"]))
+        story.append(Paragraph(_esc(filename), styles["Heading3"]))
         q = (quality_data or {}).get("files", {}).get(filename)
         if q:
             story.append(
                 Paragraph(
-                    f"Initial quality: {q['before']['overall_score']}/100 &nbsp;&rarr;&nbsp; "
-                    f"Final quality: {q['after']['overall_score']}/100",
+                    f"Initial quality: {_esc(q['before']['overall_score'])}/100 &nbsp;&rarr;&nbsp; "
+                    f"Final quality: {_esc(q['after']['overall_score'])}/100",
                     styles["Normal"],
                 )
             )
@@ -107,7 +122,10 @@ def generate_pdf_report(run_dir: Path, run_id: str) -> bytes:
             story.append(Paragraph("Major issues:", styles["Normal"]))
             for issue in top_issues:
                 story.append(
-                    Paragraph(f"- {issue['issue_type']} ({issue['column']}): {issue['description']}", styles["Normal"])
+                    Paragraph(
+                        f"- {_esc(issue['issue_type'])} ({_esc(issue['column'])}): {_esc(issue['description'])}",
+                        styles["Normal"],
+                    )
                 )
         else:
             story.append(Paragraph("No issues detected.", styles["Normal"]))
@@ -123,7 +141,7 @@ def generate_pdf_report(run_dir: Path, run_id: str) -> bytes:
     story.append(Paragraph("Dataset Overview", styles["Heading1"]))
     for filename in filenames:
         file_profile = (profile_data or {}).get("files", {}).get(filename, {}).get("profile")
-        story.append(Paragraph(filename, styles["Heading3"]))
+        story.append(Paragraph(_esc(filename), styles["Heading3"]))
         if file_profile:
             story.append(
                 _table(
@@ -143,7 +161,7 @@ def generate_pdf_report(run_dir: Path, run_id: str) -> bytes:
     story.append(Paragraph("Data Quality Assessment", styles["Heading1"]))
     for filename in filenames:
         file_issues = (issues_data or {}).get("files", {}).get(filename, [])
-        story.append(Paragraph(filename, styles["Heading3"]))
+        story.append(Paragraph(_esc(filename), styles["Heading3"]))
         if file_issues:
             rows = [[i["issue_type"], str(i["column"]), i["severity"], str(i["affected_count"])] for i in file_issues]
             story.append(_table(["Issue Type", "Column", "Severity", "Affected"], rows))
@@ -156,7 +174,7 @@ def generate_pdf_report(run_dir: Path, run_id: str) -> bytes:
     story.append(Paragraph("Cleaning Actions", styles["Heading1"]))
     for filename in filenames:
         file_clean = (cleaning_data or {}).get("files", {}).get(filename)
-        story.append(Paragraph(filename, styles["Heading3"]))
+        story.append(Paragraph(_esc(filename), styles["Heading3"]))
         log_entries = (file_clean or {}).get("log", [])
         if log_entries:
             rows = [
@@ -173,7 +191,7 @@ def generate_pdf_report(run_dir: Path, run_id: str) -> bytes:
     story.append(Paragraph("Data Lineage", styles["Heading1"]))
     for filename in filenames:
         entries = (lineage_data or {}).get("files", {}).get(filename, [])
-        story.append(Paragraph(filename, styles["Heading3"]))
+        story.append(Paragraph(_esc(filename), styles["Heading3"]))
         if entries:
             shown = entries[:_MAX_LINEAGE_ROWS]
             rows = [[e["source_column"], e["transformation"], str(e["output_column"])] for e in shown]
@@ -194,11 +212,11 @@ def generate_pdf_report(run_dir: Path, run_id: str) -> bytes:
     story.append(Paragraph("Data Drift", styles["Heading1"]))
     for filename in filenames:
         drift = (drift_data or {}).get("files", {}).get(filename)
-        story.append(Paragraph(filename, styles["Heading3"]))
+        story.append(Paragraph(_esc(filename), styles["Heading3"]))
         if not drift or drift["overall_status"] == "no_history":
             story.append(Paragraph("No prior version of this dataset to compare against.", styles["Normal"]))
         elif not drift["findings"]:
-            story.append(Paragraph(f"No drift detected (compared against {drift['compared_against']}).", styles["Normal"]))
+            story.append(Paragraph(f"No drift detected (compared against {_esc(drift['compared_against'])}).", styles["Normal"]))
         else:
             rows = [[f["drift_type"], str(f["column"]), f["severity"], f["description"]] for f in drift["findings"]]
             story.append(_table(["Drift Type", "Column", "Severity", "Description"], rows))
@@ -209,7 +227,7 @@ def generate_pdf_report(run_dir: Path, run_id: str) -> bytes:
     story.append(Paragraph("Validation Gates", styles["Heading1"]))
     for filename in filenames:
         validation = (validation_data or {}).get("files", {}).get(filename)
-        story.append(Paragraph(filename, styles["Heading3"]))
+        story.append(Paragraph(_esc(filename), styles["Heading3"]))
         if not validation:
             story.append(Paragraph("Validation was not run for this report. Run /api/validate to include it.", styles["Normal"]))
         else:
@@ -219,17 +237,35 @@ def generate_pdf_report(run_dir: Path, run_id: str) -> bytes:
         story.append(Spacer(1, 0.2 * inch))
     story.append(PageBreak())
 
-    # --- Power BI Readiness --------------------------------------------------
-    story.append(Paragraph("Power BI Readiness", styles["Heading1"]))
+    # --- Analytics Readiness ---------------------------------------------------
+    # DataQX evaluates readiness for multiple analytics platforms from the same
+    # underlying facts -- this is a readiness assessment, never a vendor
+    # certification (no platform is ever described as "Certified").
+    story.append(Paragraph("Analytics Readiness", styles["Heading1"]))
     for filename in filenames:
-        pb = (powerbi_data or {}).get("files", {}).get(filename)
-        story.append(Paragraph(filename, styles["Heading3"]))
-        if pb:
-            story.append(Paragraph(f"Readiness Score: {pb['score']}/100 (role: {pb['table_role']})", styles["Normal"]))
-            rows = [[c["check_name"], c["status"].upper(), c["message"]] for c in pb["checks"]]
+        file_readiness = (analytics_readiness_data or {}).get("files", {}).get(filename)
+        story.append(Paragraph(_esc(filename), styles["Heading3"]))
+        if not file_readiness:
+            story.append(Paragraph("Analytics readiness not available.", styles["Normal"]))
+            story.append(Spacer(1, 0.2 * inch))
+            continue
+
+        story.append(Paragraph(f"Overall Readiness: {file_readiness['overall_score']}/100", styles["Normal"]))
+        platforms = file_readiness.get("platforms", {})
+        comparison_rows = [
+            [p["platform"], f"{p['score']}/100", p["status"].replace("_", " ")] for p in platforms.values()
+        ]
+        story.append(_table(["Platform", "Score", "Status"], comparison_rows))
+        story.append(Spacer(1, 0.15 * inch))
+
+        for platform_result in platforms.values():
+            story.append(Paragraph(f"{_esc(platform_result['platform'])} Ready", styles["Heading4"]))
+            rows = [[c["check_name"], c["status"].upper(), c["message"]] for c in platform_result["checks"]]
             story.append(_table(["Check", "Status", "Message"], rows))
-        else:
-            story.append(Paragraph("Power BI readiness not available.", styles["Normal"]))
+            if platform_result.get("recommendations"):
+                for rec in platform_result["recommendations"]:
+                    story.append(Paragraph(f"- {_esc(rec)}", styles["Normal"]))
+            story.append(Spacer(1, 0.1 * inch))
         story.append(Spacer(1, 0.2 * inch))
     story.append(PageBreak())
 
@@ -237,7 +273,7 @@ def generate_pdf_report(run_dir: Path, run_id: str) -> bytes:
     story.append(Paragraph("Before vs After", styles["Heading1"]))
     for filename in filenames:
         summary = (before_after_data or {}).get("files", {}).get(filename)
-        story.append(Paragraph(filename, styles["Heading3"]))
+        story.append(Paragraph(_esc(filename), styles["Heading3"]))
         if summary:
             rows = [[metric, str(v["before"]), str(v["after"]), str(v["change"])] for metric, v in summary.items()]
             story.append(_table(["Metric", "Before", "After", "Change"], rows))
@@ -252,13 +288,14 @@ def generate_pdf_report(run_dir: Path, run_id: str) -> bytes:
     for filename in filenames:
         file_issues = (issues_data or {}).get("files", {}).get(filename, [])
         low_conf_issues = [i for i in file_issues if i.get("confidence", {}).get("confidence") == "LOW"]
-        story.append(Paragraph(filename, styles["Heading3"]))
+        story.append(Paragraph(_esc(filename), styles["Heading3"]))
         if low_conf_issues:
             rows = [[i["issue_type"], str(i["column"]), str(i["affected_count"]), i["description"]] for i in low_conf_issues]
             story.append(_table(["Issue", "Column", "Affected", "Description"], rows))
             for issue in low_conf_issues:
                 all_recommendations.append(
-                    f"Review {issue['affected_count']} '{issue['issue_type']}' finding(s) in '{issue['column']}' ({filename})."
+                    f"Review {issue['affected_count']} '{_esc(issue['issue_type'])}' finding(s) in "
+                    f"'{_esc(issue['column'])}' ({_esc(filename)})."
                 )
         else:
             story.append(Paragraph("No unresolved issues remain.", styles["Normal"]))
@@ -292,8 +329,8 @@ def generate_pdf_report(run_dir: Path, run_id: str) -> bytes:
         file_meta = run_metadata.get("files", {}).get(filename, {})
         story.append(
             Paragraph(
-                f"{filename} -- input hash: {file_meta.get('input_hash') or 'N/A'}, "
-                f"output hash: {file_meta.get('output_hash') or 'N/A'}",
+                f"{_esc(filename)} -- input hash: {_esc(file_meta.get('input_hash') or 'N/A')}, "
+                f"output hash: {_esc(file_meta.get('output_hash') or 'N/A')}",
                 styles["Normal"],
             )
         )

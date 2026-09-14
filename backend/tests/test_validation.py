@@ -101,6 +101,24 @@ def test_total_not_equal_subtotal_plus_tax_violates_business_rule():
     assert details["violations"]["total_not_equal_subtotal_plus_tax"] == 1
 
 
+def test_nan_total_rows_are_unverifiable_not_silently_passing():
+    """A NaN-heavy total column must not be reported as zero violations with no
+    indication that those rows were never actually checked."""
+    df = pd.DataFrame(
+        {
+            "id": range(1, 6),
+            "subtotal": [100, 100, 100, 100, 100],
+            "tax": [10, 10, 10, 10, 10],
+            "total": [110, None, None, 110, 110],  # two rows unverifiable, not violations
+        }
+    )
+    report = validate_dataset(df)
+
+    details = next(c.details for c in report.checks if c.check_name == "business_rules")
+    assert details.get("violations", {}).get("total_not_equal_subtotal_plus_tax", 0) == 0
+    assert details["unverifiable"]["total_not_equal_subtotal_plus_tax"] == 2
+
+
 def test_revenue_not_equal_quantity_times_price_majority_fails():
     df = pd.DataFrame(
         {

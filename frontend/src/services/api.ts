@@ -1,10 +1,22 @@
 const API_BASE_URL = "http://localhost:8000";
 
+function formatErrorDetail(detail: unknown, status: number): string {
+  if (typeof detail === "string" && detail) return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    // FastAPI's default 422 validation-error shape is an array of
+    // {loc, msg, type} objects, not a string -- without this, `new Error(detail)`
+    // stringifies the array to the useless literal "[object Object]".
+    return detail
+      .map((item) => (item && typeof item === "object" && "msg" in item ? String((item as any).msg) : String(item)))
+      .join("; ");
+  }
+  return `Request failed with status ${status}`;
+}
+
 async function parseOrThrow(response: Response): Promise<any> {
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    const detail = body?.detail || `Request failed with status ${response.status}`;
-    throw new Error(detail);
+    throw new Error(formatErrorDetail(body?.detail, response.status));
   }
   return body;
 }
@@ -59,8 +71,8 @@ export function getQuality(runId: string): Promise<any> {
   return getJson(`/api/quality/${runId}`);
 }
 
-export function getPowerBiReadiness(runId: string): Promise<any> {
-  return getJson(`/api/powerbi/${runId}`);
+export function getAnalyticsReadiness(runId: string): Promise<any> {
+  return getJson(`/api/analytics-readiness/${runId}`);
 }
 
 export function getDrift(runId: string): Promise<any> {
@@ -69,6 +81,10 @@ export function getDrift(runId: string): Promise<any> {
 
 export function getLineage(runId: string): Promise<any> {
   return getJson(`/api/lineage/${runId}`);
+}
+
+export function getAudit(runId: string): Promise<any> {
+  return getJson(`/api/audit/${runId}`);
 }
 
 export function getBeforeAfter(runId: string): Promise<any> {

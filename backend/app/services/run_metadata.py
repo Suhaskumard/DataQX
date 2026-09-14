@@ -2,7 +2,7 @@
 
 Consolidates run_metadata.json reads/writes into one shared helper instead of every
 endpoint hand-rolling its own json.loads/mutate/json.dumps. File-based only, no
-database. quality_score/powerbi_readiness are left null until the phases that
+database. quality_score/analytics_readiness are left null until the phases that
 actually compute them exist -- S63 forbids inventing scores.
 """
 
@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -26,12 +28,24 @@ def read_run_metadata(run_dir: Path) -> dict:
     metadata_path = run_dir / "run_metadata.json"
     if not metadata_path.exists():
         return {}
-    return json.loads(metadata_path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(metadata_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        # A truncated/corrupt file (e.g. from a process killed mid-write, before the
+        # atomic-replace fix below existed) must not permanently break every future
+        # read for this run -- degrade to "no metadata yet" instead of raising.
+        return {}
 
 
 def write_run_metadata(run_dir: Path, metadata: dict) -> None:
     metadata["updated_at"] = datetime.now(timezone.utc).isoformat()
-    (run_dir / "run_metadata.json").write_text(json.dumps(metadata, indent=2, default=str), encoding="utf-8")
+    metadata_path = run_dir / "run_metadata.json"
+    # Write to a temp file in the same directory then atomically replace -- a crash
+    # mid-write can never leave run_metadata.json truncated/corrupt (os.replace is
+    # atomic on both POSIX and Windows, unlike a direct in-place write_text).
+    tmp_path = run_dir / f".run_metadata.{uuid.uuid4().hex}.tmp"
+    tmp_path.write_text(json.dumps(metadata, indent=2, default=str), encoding="utf-8")
+    os.replace(tmp_path, metadata_path)
 
 
 def update_run_metadata(run_dir: Path, files: dict | None = None, **top_level_updates) -> dict:

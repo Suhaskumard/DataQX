@@ -66,7 +66,13 @@ def _sniff_delimiter(sample_text: str, default: str) -> str:
 def _load_delimited_text(path: Path, default_delimiter: str | None) -> IngestionResult:
     raw_bytes = path.read_bytes()
     encoding = _detect_encoding(raw_bytes)
-    text = raw_bytes.decode(encoding)
+    try:
+        text = raw_bytes.decode(encoding)
+    except UnicodeDecodeError as exc:
+        # chardet's guess is a best-effort heuristic, not a guarantee -- a
+        # low-confidence wrong guess must still surface as a friendly rejection,
+        # not an unhandled 500.
+        raise IngestionError(f"Could not decode file as {encoding}: {exc}") from exc
     sample = text[:8192]
 
     delimiter = _sniff_delimiter(sample, default_delimiter or ",")
@@ -174,7 +180,13 @@ def _load_json(path: Path) -> IngestionResult:
         df = None
 
     if needs_flattening:
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except RecursionError as exc:
+            # json.loads is a recursive-descent parser -- extremely deeply nested
+            # (adversarial or accidental) JSON can exhaust the interpreter's stack
+            # before json_normalize is ever reached.
+            raise IngestionError("JSON structure is too deeply nested to parse.") from exc
         if isinstance(raw, dict):
             raw = [raw]
         try:

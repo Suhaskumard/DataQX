@@ -58,7 +58,7 @@ def test_clean_endpoint_produces_correct_output_and_preserves_raw():
     metadata = json.loads((settings.runs_dir / run_id / "run_metadata.json").read_text(encoding="utf-8"))
     assert metadata["status"] == "cleaned"
     # Phase 17 gap found while building Phase 18: quality_score was never actually
-    # wired into run_metadata.json (only powerbi_readiness was) -- now fixed.
+    # wired into run_metadata.json (only analytics_readiness was) -- now fixed.
     assert metadata["quality_score"] is not None
 
     # Phase 14: output_hash recorded for a published file, matching the real cleaned CSV.
@@ -106,6 +106,40 @@ def test_clean_endpoint_produces_correct_output_and_preserves_raw():
     assert "column_name" in dictionary.columns
     status_row = dictionary[dictionary["original_name"] == "status"].iloc[0]
     assert pd.notna(status_row["cleaning_actions"])
+
+
+def test_analytics_readiness_endpoint_reflects_cleaned_data_after_clean_not_stale_raw_snapshot():
+    # Real bug found via a live E2E run: /api/analytics-readiness (formerly
+    # /api/powerbi) served the snapshot written once by /api/analyze on the RAW
+    # data and never updated it, so after /api/clean removed a duplicate row
+    # (fixing the duplicate-key violation and publishing a valid dataset), the
+    # Dashboard/Analytics Readiness page kept showing the old, lower pre-clean
+    # score forever -- contradicting the correct "after" figure already shown on
+    # the Before/After page for the exact same run.
+    content = b"id,value\n1,a\n2,b\n3,c\n4,d\n5,e\n6,f\n7,g\n8,h\n9,i\n9,i\n"
+    run_id = _upload(content)
+
+    assert client.post("/api/analyze", json={"run_id": run_id}).status_code == 200
+    raw_readiness = client.get(f"/api/analytics-readiness/{run_id}").json()
+    raw_powerbi = raw_readiness["files"]["data.csv"]["platforms"]["power_bi"]
+    raw_check = {c["check_name"]: c for c in raw_powerbi["checks"]}
+    assert raw_check["duplicate_keys"]["status"] == "fail"
+    raw_score = raw_powerbi["score"]
+
+    assert client.post("/api/clean", json={"run_id": run_id}).status_code == 200
+
+    settings = get_settings()
+    before_after = json.loads((settings.runs_dir / run_id / "before_after_summary.json").read_text(encoding="utf-8"))
+    expected_after_score = before_after["files"]["data.csv"]["analytics_readiness"]["after"]
+
+    updated_readiness = client.get(f"/api/analytics-readiness/{run_id}").json()
+    updated_file = updated_readiness["files"]["data.csv"]
+    updated_powerbi = updated_file["platforms"]["power_bi"]
+    updated_check = {c["check_name"]: c for c in updated_powerbi["checks"]}
+
+    assert updated_check["duplicate_keys"]["status"] == "pass"
+    assert updated_file["overall_score"] == expected_after_score
+    assert updated_powerbi["score"] > raw_score
 
 
 def test_clean_endpoint_appends_across_multiple_runs_without_overwriting():

@@ -23,7 +23,7 @@ METHODOLOGY = {
     "uniqueness": "100 - duplicate row percentage - duplicate ID percentage (if any ID column exists)",
     "integrity": "derived from the Validation Engine's overall status: pass=100, warning=80, fail=40",
     "schema_quality": "100 - 10 points per constant or fully-empty column",
-    "powerbi_readiness": "Phase 16's own computed Power BI readiness score, reused directly",
+    "analytics_readiness": "Phase 16's own computed Analytics Readiness overall score, reused directly",
 }
 
 
@@ -94,7 +94,7 @@ def compute_quality_score(
     profile: DatasetProfile,
     issues: list[Issue],
     validation_report: ValidationReport | None,
-    powerbi_score: float,
+    analytics_readiness_score: float,
 ) -> QualityScoreResult:
     dimensions = {
         "completeness": round(_completeness(profile), 2),
@@ -103,7 +103,7 @@ def compute_quality_score(
         "uniqueness": round(_uniqueness(df, profile), 2),
         "integrity": round(_integrity(validation_report), 2),
         "schema_quality": round(_schema_quality(profile), 2),
-        "powerbi_readiness": round(float(powerbi_score), 2),
+        "analytics_readiness": round(float(analytics_readiness_score), 2),
     }
     overall = round(sum(dimensions.values()) / len(dimensions))
     return QualityScoreResult(overall_score=overall, dimensions=dimensions)

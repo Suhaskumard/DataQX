@@ -105,6 +105,29 @@ def test_ambiguous_date_format_detected():
     assert matches[0].column == "order_date"
 
 
+def test_ambiguous_date_format_detected_for_contradictory_unambiguous_conventions():
+    """Two values that are each individually unambiguous but imply opposite date
+    conventions (13/02 can only be DD/MM; 02/13 can only be MM/DD) is the clearest
+    possible case of mixed date formats -- it must be flagged even with no single
+    jointly-ambiguous value present."""
+    df = pd.DataFrame({"signup_date": ["13/02/2024", "02/13/2024", "01/01/2024", "05/05/2024"]})
+    profile = profile_dataset(df)
+
+    issues = detect_issues(df, profile)
+    matches = _issues_of_type(issues, "ambiguous_date_format")
+    assert len(matches) == 1
+    assert matches[0].column == "signup_date"
+
+
+def test_ambiguous_date_format_detected_with_two_digit_year():
+    df = pd.DataFrame({"order_date": ["15/03/24", "03/04/24", "20/01/24", "05/06/24"]})
+    profile = profile_dataset(df)
+
+    issues = detect_issues(df, profile)
+    matches = _issues_of_type(issues, "ambiguous_date_format")
+    assert len(matches) == 1
+
+
 def test_impossible_age_value_detected():
     df = pd.DataFrame({"age": [25, 30, -5, 200, 40]})
     profile = profile_dataset(df)
@@ -114,6 +137,21 @@ def test_impossible_age_value_detected():
     assert len(matches) == 1
     assert matches[0].column == "age"
     assert matches[0].affected_count == 2
+
+
+def test_impossible_age_value_detected_even_when_column_has_unrelated_non_numeric_value():
+    # Real bug found via a live E2E run: one unrelated non-numeric string (a typo,
+    # already caught separately as its own mixed_data_types issue) forces the whole
+    # column to object dtype, which must not silently suppress the impossible-value
+    # check against the column's other, perfectly numeric values.
+    df = pd.DataFrame({"age": [25, 30, "abc", 150, 40]})
+    profile = profile_dataset(df)
+
+    issues = detect_issues(df, profile)
+    matches = _issues_of_type(issues, "impossible_value")
+    assert len(matches) == 1
+    assert matches[0].column == "age"
+    assert matches[0].affected_count == 1
 
 
 def test_negative_quantity_detected():

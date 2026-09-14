@@ -97,17 +97,41 @@ def _row_for_skipped_issue(run_id: str, dataset_name: str, issue: Issue, timesta
     }
 
 
+def _row_for_protected_skip(run_id: str, dataset_name: str, skip: dict, timestamp: str) -> dict:
+    """Unlike `_row_for_skipped_issue`, this reports the issue's real confidence --
+    it was withheld solely because its column is protected, not because it was
+    genuinely low-confidence, so the audit trail must not claim otherwise (S33)."""
+    return {
+        "timestamp": timestamp,
+        "run_id": run_id,
+        "dataset": dataset_name,
+        "column": skip["column"],
+        "row_reference": None,
+        "issue_type": skip["issue_type"],
+        "original_value": None,
+        "new_value": None,
+        "action": skip["action"],
+        "rule": skip["rule"],
+        "reason": skip["reason"],
+        "confidence": skip["confidence"],
+        "severity": skip["severity"],
+        "status": "skipped_protected",
+    }
+
+
 def build_log_rows(
     run_id: str,
     dataset_name: str,
     issues: list[Issue],
     cleaning_log: list[CleaningLogEntry],
+    protected_skips: list[dict] | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Return (audit_rows, cleaning_rows) for one file's analysis+cleaning results."""
     timestamp = datetime.now(timezone.utc).isoformat()
 
     # Match applied cleaning entries back to their originating issue by (issue_type, column).
     applied_by_key = {(entry.issue_type, entry.column): entry for entry in cleaning_log}
+    protected_by_key = {(s["issue_type"], s["column"]): s for s in (protected_skips or [])}
 
     audit_rows: list[dict] = []
     cleaning_rows: list[dict] = []
@@ -115,10 +139,13 @@ def build_log_rows(
     for issue in issues:
         key = (issue.issue_type, issue.column)
         entry = applied_by_key.get(key)
+        skip = protected_by_key.get(key)
         if entry is not None:
             rows = _rows_for_applied_entry(run_id, dataset_name, issue, entry, timestamp)
             audit_rows.extend(rows)
             cleaning_rows.extend(rows)
+        elif skip is not None:
+            audit_rows.append(_row_for_protected_skip(run_id, dataset_name, skip, timestamp))
         else:
             audit_rows.append(_row_for_skipped_issue(run_id, dataset_name, issue, timestamp))
 
@@ -134,11 +161,20 @@ def append_rows_to_csv(path: Path, rows: list[dict], columns: list[str] = AUDIT_
         return
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    file_exists = path.exists() and path.stat().st_size > 0
+
+    # This file is shared across every run (a global, not per-run, log). A plain
+    # exists()-then-open("a") check is a TOCTOU race: two concurrent writers can both
+    # see "file doesn't exist yet" and both write a header row. An exclusive-create
+    # attempt closes almost all of that window cheaply, without a cross-platform file
+    # locking dependency -- exactly one writer can win the "x" open; every other
+    # concurrent writer gets FileExistsError and falls through to plain append.
+    try:
+        with open(path, "x", newline="", encoding="utf-8") as f:
+            csv.DictWriter(f, fieldnames=columns).writeheader()
+    except FileExistsError:
+        pass
 
     with open(path, "a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=columns)
-        if not file_exists:
-            writer.writeheader()
         for row in rows:
             writer.writerow(row)

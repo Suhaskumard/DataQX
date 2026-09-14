@@ -52,4 +52,16 @@ describe("App routing and layout shell", () => {
     expect(screen.getByRole("button", { name: /analyze dataset/i })).toBeInTheDocument();
     expect(screen.queryByText("Not available yet")).not.toBeInTheDocument();
   });
+
+  it("shows a 'Page not found' view instead of a blank pane for an unknown URL (Phase 25 fix)", () => {
+    render(
+      <MemoryRouter initialEntries={["/this-route-does-not-exist"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("heading", { name: "Page not found" })).toBeInTheDocument();
+    // Sidebar shell still renders around it -- this is a route miss, not a crash.
+    expect(screen.getByRole("link", { name: "Dashboard" })).toBeInTheDocument();
+  });
 });

@@ -38,7 +38,11 @@ def parse_project_plan(text: str) -> ProjectPlan:
     for line in text.splitlines():
         stripped = line.strip()
         if stripped.startswith("#"):
-            current_section = stripped.lstrip("#").strip().lower()
+            # Tolerate minor real-world header variations ("Required Columns:",
+            # "Required Columns -") -- an exact-match-only comparison here silently
+            # disabled an entire section with no warning whenever a user's heading
+            # didn't match byte-for-byte, discarding data the user explicitly provided.
+            current_section = stripped.lstrip("#").strip().rstrip(":-").strip().lower()
             continue
         if not stripped:
             continue
@@ -51,6 +55,10 @@ def parse_project_plan(text: str) -> ProjectPlan:
                 protected_columns.append(item)
             elif current_section == _REQUIRED_COLUMNS_HEADER:
                 required_columns.append(item)
+            elif current_section == _OBJECTIVE_HEADER:
+                # A bulleted objective ("- Prepare data for dashboard") must still
+                # count as objective text, not be silently dropped.
+                objective_lines.append(item)
         elif current_section == _OBJECTIVE_HEADER:
             objective_lines.append(stripped)
 
@@ -67,14 +75,25 @@ def load_project_plan(run_dir: Path) -> ProjectPlan | None:
     plan_path = run_dir / "project_plan.md"
     if not plan_path.exists():
         return None
-    return parse_project_plan(plan_path.read_text(encoding="utf-8"))
+    raw_bytes = plan_path.read_bytes()
+    try:
+        text = raw_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        # A plan pasted from Word/Excel is often saved as Windows-1252, not UTF-8
+        # (smart quotes, em-dashes). Degrade gracefully instead of crashing the run.
+        text = raw_bytes.decode("cp1252", errors="replace")
+    return parse_project_plan(text)
 
 
 def check_required_columns(df: pd.DataFrame, plan: ProjectPlan) -> list[Issue]:
     if not plan.required_columns:
         return []
 
-    missing = [c for c in plan.required_columns if c not in df.columns]
+    # Case/whitespace-insensitive: a plan requiring "Customer_ID" is satisfied by a
+    # real column named "customer_id" -- matching cleaning.py's protected-column
+    # normalization so the same plan is interpreted consistently everywhere.
+    normalized_present = {str(c).strip().casefold() for c in df.columns}
+    missing = [c for c in plan.required_columns if c.strip().casefold() not in normalized_present]
     if not missing:
         return []
 

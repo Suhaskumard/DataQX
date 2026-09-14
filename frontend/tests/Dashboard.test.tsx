@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { useEffect } from "react";
 import Dashboard from "../src/pages/Dashboard";
 import { RunProvider, useRun } from "../src/context/RunContext";
+import { ThemeProvider } from "../src/context/ThemeContext";
 
 const MOCK_RUN = {
   runId: "run_test_456",
@@ -24,7 +25,14 @@ const MOCK_RUN = {
     },
   },
   quality: { files: { "sales.csv": { after: { overall_score: 87 } } } },
-  powerbi: { files: { "sales.csv": { score: 73 } } },
+  analyticsReadiness: {
+    files: {
+      "sales.csv": {
+        overall_score: 73,
+        platforms: { power_bi: { platform: "Power BI", score: 73, status: "READY_WITH_WARNINGS" } },
+      },
+    },
+  },
   drift: { files: { "sales.csv": { overall_status: "no_history" } } },
   performance: {
     processing_time_seconds: { upload: 0.01, analyze: 0.25, clean: 0.12, validate: 0.05 },
@@ -44,11 +52,11 @@ function Seed({ children }: { children: React.ReactNode }) {
 function renderWithRun() {
   return render(
     <MemoryRouter>
-      <RunProvider>
+      <ThemeProvider><RunProvider>
         <Seed>
           <Dashboard />
         </Seed>
-      </RunProvider>
+      </RunProvider></ThemeProvider>
     </MemoryRouter>,
   );
 }
@@ -60,7 +68,7 @@ describe("Dashboard with an active run", () => {
     expect(screen.getByText("87/100")).toBeInTheDocument(); // quality score
     expect(screen.getByText("42")).toBeInTheDocument(); // rows
     expect(screen.getByText("6")).toBeInTheDocument(); // columns
-    expect(screen.getByText("73/100")).toBeInTheDocument(); // powerbi readiness
+    expect(screen.getByText("73/100")).toBeInTheDocument(); // analytics readiness
 
     // Both Issues Detected and Issues Fixed happen to be 2 in this fixture --
     // scope each query to its own card rather than a bare text match.
@@ -93,13 +101,71 @@ describe("Dashboard with an active run", () => {
   });
 });
 
+describe("Dashboard with a failed analyze stage (Phase 25 fix)", () => {
+  it("shows a clear failure message instead of crashing with a white screen", () => {
+    const failedRun = {
+      ...MOCK_RUN,
+      analyzeResult: { files: { "sales.csv": { status: "failed", reason: "Could not analyze this file." } } },
+    };
+    function SeedFailed({ children }: { children: React.ReactNode }) {
+      const { setRun } = useRun();
+      useEffect(() => {
+        setRun(failedRun as any);
+      }, [setRun]);
+      return <>{children}</>;
+    }
+    render(
+      <MemoryRouter>
+        <ThemeProvider><RunProvider>
+          <SeedFailed>
+            <Dashboard />
+          </SeedFailed>
+        </RunProvider></ThemeProvider>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(/Analysis failed for "sales.csv"/)).toBeInTheDocument();
+    expect(screen.getByText(/Could not analyze this file\./)).toBeInTheDocument();
+  });
+});
+
+describe("Dashboard with a failed quality/analytics-readiness stage but successful analyze/clean", () => {
+  it("degrades individual stat cards to a placeholder instead of crashing", () => {
+    const partialRun = {
+      ...MOCK_RUN,
+      quality: { files: { "sales.csv": { status: "failed", reason: "Quality scoring errored." } } },
+      analyticsReadiness: { files: { "sales.csv": { status: "failed", reason: "Analytics readiness check errored." } } },
+    };
+    function SeedPartial({ children }: { children: React.ReactNode }) {
+      const { setRun } = useRun();
+      useEffect(() => {
+        setRun(partialRun as any);
+      }, [setRun]);
+      return <>{children}</>;
+    }
+    render(
+      <MemoryRouter>
+        <ThemeProvider><RunProvider>
+          <SeedPartial>
+            <Dashboard />
+          </SeedPartial>
+        </RunProvider></ThemeProvider>
+      </MemoryRouter>,
+    );
+
+    // Page renders (no crash) and the rest of the dashboard still shows real data.
+    expect(screen.getByText("42")).toBeInTheDocument(); // rows still render
+    expect(screen.getAllByText("No dataset analyzed yet").length).toBeGreaterThan(0); // degraded stat cards
+  });
+});
+
 describe("Dashboard with no active run", () => {
   it("shows the empty state, no fabricated numbers", () => {
     render(
       <MemoryRouter>
-        <RunProvider>
+        <ThemeProvider><RunProvider>
           <Dashboard />
-        </RunProvider>
+        </RunProvider></ThemeProvider>
       </MemoryRouter>,
     );
 

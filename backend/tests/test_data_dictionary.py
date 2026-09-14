@@ -5,6 +5,7 @@ from app.services.data_dictionary import DATA_DICTIONARY_COLUMNS, build_data_dic
 from app.services.issue_detection import detect_issues
 from app.services.lineage import build_lineage
 from app.services.profiling import profile_dataset
+from app.services.semantic_roles import classify_columns
 
 
 def test_data_dictionary_fixed_column_has_cleaning_actions_and_lineage_id():
@@ -46,3 +47,27 @@ def test_data_dictionary_has_expected_columns_and_types():
     assert row["min"] == 10.0
     assert row["max"] == 50.0
     assert "column" in row["description"].lower()
+    # No platform readiness was computed for this call -- platform columns must be
+    # blank, never a fabricated role.
+    assert row["power_bi_role"] is None
+    assert row["sql_role"] is None
+
+
+def test_data_dictionary_carries_real_platform_field_roles():
+    df = pd.DataFrame({"customer_id": range(1, 11), "revenue": range(10)})
+    profile = profile_dataset(df)
+    issues = detect_issues(df, profile)
+    roles = classify_columns(profile)
+
+    from app.services.platform_rules.powerbi import evaluate as evaluate_powerbi
+    from app.services.platform_rules.sql import evaluate as evaluate_sql
+
+    platform_field_roles = {
+        "power_bi": evaluate_powerbi(df, profile, issues, roles).field_roles,
+        "sql": evaluate_sql(df, profile, issues, roles).field_roles,
+    }
+    dictionary = build_data_dictionary(profile, [], [], platform_field_roles)
+
+    id_row = next(r for r in dictionary if r["original_name"] == "customer_id")
+    assert id_row["power_bi_role"] == "Key"
+    assert id_row["sql_role"] == "Primary Key Candidate"

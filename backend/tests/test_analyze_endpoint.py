@@ -73,3 +73,25 @@ def test_analyze_mean_matches_hand_calculation():
     assert amount_col["mean"] == 30.0
     assert amount_col["min"] == 10.0
     assert amount_col["max"] == 50.0
+
+
+def test_infinity_in_data_never_leaks_into_written_profile_json():
+    """profile.json is read raw by pdf_report.py (json.loads) and can be downloaded
+    directly by a client -- it must always be strictly valid JSON, never containing
+    the non-standard Infinity/-Infinity/NaN tokens Python's json.dumps allows by
+    default for a column that legitimately contains inf/-inf sentinel values."""
+    content = b"id,amount\n1,10\n2,inf\n3,-inf\n4,20\n"
+    run_id = _upload(content, filename="data.csv")
+
+    response = client.post("/api/analyze", json={"run_id": run_id})
+    assert response.status_code == 200
+
+    settings = get_settings()
+    profile_text = (settings.runs_dir / run_id / "profile.json").read_text(encoding="utf-8")
+    assert "Infinity" not in profile_text
+    assert "NaN" not in profile_text
+
+    # Confirms it's genuinely valid JSON, not just missing those two substrings.
+    import json
+
+    json.loads(profile_text)

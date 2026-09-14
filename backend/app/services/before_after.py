@@ -22,7 +22,7 @@ BEFORE_AFTER_METRICS = (
     "invalid_dates",
     "outliers",
     "quality_score",
-    "powerbi_readiness",
+    "analytics_readiness",
 )
 
 
@@ -37,7 +37,7 @@ class SnapshotMetrics:
     invalid_dates: int
     outliers: int
     quality_score: float
-    powerbi_readiness: float
+    analytics_readiness: float
 
 
 def build_snapshot_metrics(
@@ -45,7 +45,7 @@ def build_snapshot_metrics(
     profile: DatasetProfile,
     issues: list[Issue],
     quality_score: float,
-    powerbi_readiness: float,
+    analytics_readiness: float,
 ) -> SnapshotMetrics:
     duplicate_ids = 0
     for col in profile.columns:
@@ -65,7 +65,7 @@ def build_snapshot_metrics(
         invalid_dates=_affected({"invalid_date"}),
         outliers=_affected({"outlier"}),
         quality_score=quality_score,
-        powerbi_readiness=powerbi_readiness,
+        analytics_readiness=analytics_readiness,
     )
 
 

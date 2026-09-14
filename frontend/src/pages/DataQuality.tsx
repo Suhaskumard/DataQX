@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import DataTable from "../components/DataTable";
 import EmptyRunState from "../components/EmptyRunState";
+import Badge from "../components/Badge";
 import { useRun } from "../context/RunContext";
 
 export default function DataQuality() {
@@ -8,8 +9,9 @@ export default function DataQuality() {
   const [severityFilter, setSeverityFilter] = useState("all");
   const [confidenceFilter, setConfidenceFilter] = useState("all");
 
-  const filename = run ? Object.keys(run.issues.files)[0] : null;
-  const allIssues: any[] = run && filename ? run.issues.files[filename] : [];
+  const filename = run ? Object.keys(run.issues.files ?? {})[0] : null;
+  const rawIssues = run && filename ? run.issues.files[filename] : [];
+  const allIssues: any[] = Array.isArray(rawIssues) ? rawIssues : [];
 
   const filtered = useMemo(() => {
     return allIssues.filter((issue) => {
@@ -30,15 +32,15 @@ export default function DataQuality() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Data Quality</h1>
-        <p className="text-sm text-slate-500 mt-1">{filename}</p>
+        <h1 className="text-xl font-semibold text-primary">Data Quality</h1>
+        <p className="text-sm text-secondary mt-1">{filename}</p>
       </div>
 
       <div className="flex gap-3">
         <select
           value={severityFilter}
           onChange={(e) => setSeverityFilter(e.target.value)}
-          className="rounded-md border border-slate-300 text-sm px-2 py-1"
+          className="rounded-md border border-line-strong text-sm px-2 py-1"
         >
           <option value="all">All severities</option>
           {severities.map((s) => (
@@ -50,7 +52,7 @@ export default function DataQuality() {
         <select
           value={confidenceFilter}
           onChange={(e) => setConfidenceFilter(e.target.value)}
-          className="rounded-md border border-slate-300 text-sm px-2 py-1"
+          className="rounded-md border border-line-strong text-sm px-2 py-1"
         >
           <option value="all">All confidence levels</option>
           {confidences.map((c) => (
@@ -72,7 +74,12 @@ export default function DataQuality() {
         ]}
         rows={filtered.map((issue) => ({
           ...issue,
-          confidence_level: issue.confidence?.confidence,
+          severity: issue.severity ? <Badge kind="severity" value={issue.severity} /> : issue.severity,
+          confidence_level: issue.confidence?.confidence ? (
+            <Badge kind="confidence" value={issue.confidence.confidence} />
+          ) : (
+            issue.confidence?.confidence
+          ),
         }))}
         emptyMessage={allIssues.length === 0 ? "No issues detected." : "No issues match the current filters."}
       />

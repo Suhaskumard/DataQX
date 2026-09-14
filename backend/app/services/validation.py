@@ -128,6 +128,12 @@ def _find_column(df: pd.DataFrame, *patterns: str) -> str | None:
 
 def _check_business_rules(df: pd.DataFrame) -> ValidationCheckResult:
     violations = {}
+    # Rows where a relevant column is NaN can't be arithmetically compared at all
+    # ((expected - actual).abs() > tolerance is False for NaN, so they were previously
+    # silently counted as "passing" rather than "unverifiable" -- a NaN-heavy total/tax
+    # column could report zero violations despite no row ever actually being checked).
+    # Tracked separately so existing violation-count semantics/keys are unchanged.
+    unverifiable = {}
 
     start_col = _find_column(df, r"start_?date")
     end_col = _find_column(df, r"end_?date")
@@ -138,29 +144,45 @@ def _check_business_rules(df: pd.DataFrame) -> ValidationCheckResult:
         bad = int((both_valid & (end < start)).sum())
         if bad:
             violations["end_date_before_start_date"] = bad
+        unresolved = int((~both_valid).sum())
+        if unresolved:
+            unverifiable["end_date_before_start_date"] = unresolved
 
     subtotal_col = _find_column(df, r"subtotal")
     tax_col = _find_column(df, r"^tax$|_tax$")
     total_col = _find_column(df, r"^total$|_total$")
     if subtotal_col and tax_col and total_col:
+        relevant = df[[subtotal_col, tax_col, total_col]]
+        has_value = relevant.notna().all(axis=1)
         expected = df[subtotal_col] + df[tax_col]
-        mismatch = (expected - df[total_col]).abs() > _TOLERANCE
+        mismatch = has_value & ((expected - df[total_col]).abs() > _TOLERANCE)
         bad = int(mismatch.sum())
         if bad:
             violations["total_not_equal_subtotal_plus_tax"] = bad
+        unresolved = int((~has_value).sum())
+        if unresolved:
+            unverifiable["total_not_equal_subtotal_plus_tax"] = unresolved
 
     qty_col = _find_column(df, r"quantity")
     price_col = _find_column(df, r"unit_?price|^price$")
     revenue_col = _find_column(df, r"revenue|^amount$")
     if qty_col and price_col and revenue_col:
+        relevant = df[[qty_col, price_col, revenue_col]]
+        has_value = relevant.notna().all(axis=1)
         expected = df[qty_col] * df[price_col]
-        mismatch = (expected - df[revenue_col]).abs() > _TOLERANCE
+        mismatch = has_value & ((expected - df[revenue_col]).abs() > _TOLERANCE)
         bad = int(mismatch.sum())
         if bad:
             violations["revenue_not_equal_quantity_times_price"] = bad
+        unresolved = int((~has_value).sum())
+        if unresolved:
+            unverifiable["revenue_not_equal_quantity_times_price"] = unresolved
 
     if not violations:
-        return ValidationCheckResult("business_rules", "pass", "No applicable business rule violations found.")
+        details = {"unverifiable": unverifiable} if unverifiable else {}
+        return ValidationCheckResult(
+            "business_rules", "pass", "No applicable business rule violations found.", details
+        )
 
     total_violations = sum(violations.values())
     row_count = max(len(df), 1)
@@ -168,7 +190,7 @@ def _check_business_rules(df: pd.DataFrame) -> ValidationCheckResult:
     return ValidationCheckResult(
         "business_rules", status,
         f"Business rule violation(s) found: {violations}.",
-        {"violations": violations},
+        {"violations": violations, "unverifiable": unverifiable},
     )
 
 

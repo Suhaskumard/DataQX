@@ -2,6 +2,10 @@
 
 Built from the cleaned dataset's own profile plus this file's lineage and cleaning
 log -- cleaning_actions/lineage_id are real, matched by column, never placeholder text.
+
+Also carries one column per analytics platform (power_bi_role, tableau_role, ...),
+sourced directly from each platform module's own `field_roles` output (see
+`app.services.analytics_readiness`) -- never invented here.
 """
 
 from __future__ import annotations
@@ -9,6 +13,21 @@ from __future__ import annotations
 from app.services.cleaning import CleaningLogEntry
 from app.services.lineage import LineageEntry
 from app.services.profiling import DatasetProfile
+
+# platform key (as used by app.services.platform_rules.PLATFORM_MODULES) -> the
+# data-dictionary column name it fills in.
+PLATFORM_ROLE_COLUMNS = {
+    "power_bi": "power_bi_role",
+    "tableau": "tableau_role",
+    "alteryx": "alteryx_role",
+    "excel": "excel_relevance",
+    "looker": "looker_role",
+    "looker_studio": "looker_studio_role",
+    "qlik": "qlik_role",
+    "sql": "sql_role",
+    "python": "python_role",
+    "r": "r_role",
+}
 
 DATA_DICTIONARY_COLUMNS = [
     "column_name",
@@ -26,6 +45,7 @@ DATA_DICTIONARY_COLUMNS = [
     "example_values",
     "cleaning_actions",
     "lineage_id",
+    *PLATFORM_ROLE_COLUMNS.values(),
 ]
 
 
@@ -38,7 +58,13 @@ def build_data_dictionary(
     profile: DatasetProfile,
     lineage_entries: list[LineageEntry],
     cleaning_log: list[CleaningLogEntry],
+    platform_field_roles: dict[str, dict[str, str]] | None = None,
 ) -> list[dict]:
+    """`platform_field_roles` is `{platform_key: {column: role_label}}`, i.e. each
+    platform result's own `field_roles` from `AnalyticsReadinessResult.platforms`
+    -- optional so callers that haven't computed readiness yet still get a valid
+    dictionary with blank platform columns rather than an error."""
+    platform_field_roles = platform_field_roles or {}
     lineage_by_column: dict[str, list[LineageEntry]] = {}
     for entry in lineage_entries:
         lineage_by_column.setdefault(entry.source_column, []).append(entry)
@@ -73,6 +99,10 @@ def build_data_dictionary(
                 "example_values": "; ".join(col.example_values),
                 "cleaning_actions": cleaning_actions,
                 "lineage_id": lineage_id,
+                **{
+                    column_name: platform_field_roles.get(platform_key, {}).get(col.original_name)
+                    for platform_key, column_name in PLATFORM_ROLE_COLUMNS.items()
+                },
             }
         )
     return rows

@@ -5,3 +5,33 @@
 html, body, #root {
   height: 100%;
 }
+
+/* DataQX design tokens (RGB triplets, no wrapper, for Tailwind's
+   rgb(var(--x) / <alpha-value>) pattern -- see tailwind.config.js).
+   Light is the default; .dark on <html> overrides every token below. */
+:root {
+  --color-canvas: 244 245 249;
+  --color-surface: 255 255 255;
+  --color-surface-raised: 238 241 247;
+  --color-border: 226 230 238;
+  --color-border-strong: 199 206 218;
+  --color-text-primary: 15 23 42;
+  --color-text-secondary: 71 85 105;
+  --color-text-muted: 100 116 139;
+}
+
+.dark {
+  --color-canvas: 11 18 32;
+  --color-surface: 18 26 43;
+  --color-surface-raised: 26 36 56;
+  --color-border: 38 49 74;
+  --color-border-strong: 58 72 99;
+  --color-text-primary: 232 236 245;
+  --color-text-secondary: 170 180 200;
+  --color-text-muted: 140 152 178;
+}
+
+body {
+  background-color: rgb(var(--color-canvas));
+  color: rgb(var(--color-text-primary));
+}

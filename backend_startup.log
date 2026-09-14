@@ -1,0 +1,21 @@
+INFO:     Started server process [23716]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:55440 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61397 - "POST /api/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61397 - "OPTIONS /api/analyze HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61397 - "POST /api/analyze HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61397 - "OPTIONS /api/clean HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61397 - "POST /api/clean HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61397 - "OPTIONS /api/validate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61397 - "POST /api/validate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62115 - "GET /api/quality/run_20260914_034446_da3fedd4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61397 - "GET /api/issues/run_20260914_034446_da3fedd4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55647 - "GET /api/powerbi/run_20260914_034446_da3fedd4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59212 - "GET /api/drift/run_20260914_034446_da3fedd4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60542 - "GET /api/lineage/run_20260914_034446_da3fedd4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50511 - "GET /api/before-after/run_20260914_034446_da3fedd4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62115 - "GET /api/dictionary/run_20260914_034446_da3fedd4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61397 - "GET /api/performance/run_20260914_034446_da3fedd4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60014 - "GET /api/report/run_20260914_034446_da3fedd4 HTTP/1.1" 200 OK

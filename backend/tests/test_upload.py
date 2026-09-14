@@ -106,6 +106,31 @@ def test_path_traversal_filename_is_sanitized():
     assert saved_path.parent == (settings.input_dir / run_id)
 
 
+def test_colliding_sanitized_filenames_are_disambiguated_not_overwritten():
+    """Two distinct original filenames that sanitize to the same safe name must not
+    silently overwrite each other on disk while both report status="saved"."""
+    content_a = b"a,b\n1,2\n"
+    content_b = b"a,b\n3,4\n"
+    response = client.post(
+        "/api/upload",
+        files=[
+            ("files", ("sales@2024.csv", content_a, "text/csv")),
+            ("files", ("sales#2024.csv", content_b, "text/csv")),
+        ],
+    )
+    assert response.status_code == 200
+    body = response.json()
+    saved_names = [f["saved_name"] for f in body["files"] if f["status"] == "saved"]
+    assert len(saved_names) == 2
+    assert len(set(saved_names)) == 2  # distinct names -- no collision
+
+    settings = get_settings()
+    run_dir = settings.input_dir / body["run_id"]
+    on_disk = {p.name: p.read_bytes() for p in run_dir.iterdir()}
+    assert on_disk[saved_names[0]] == content_a
+    assert on_disk[saved_names[1]] == content_b
+
+
 def test_project_plan_text_saved():
     content = b"id\n1\n"
     response = client.post(
@@ -159,7 +184,7 @@ def test_run_metadata_written():
     assert metadata["files"]["data.csv"]["input_hash"] == expected_hash
     assert metadata["files"]["data.csv"]["output_hash"] is None
     assert metadata["quality_score"] is None  # never fabricated (S63)
-    assert metadata["powerbi_readiness"] is None
+    assert metadata["analytics_readiness"] is None
     assert metadata["processing_time_seconds"]["upload"] > 0
 
 
