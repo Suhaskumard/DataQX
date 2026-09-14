@@ -14,3 +14,9 @@ services:
         value: production
       - key: DATAQX_MAX_UPLOAD_MB
         value: "200"
+      # Pins the interpreter to one with prebuilt wheels for numpy/pyarrow/scipy at
+      # the versions in requirements.txt -- without this, Render's default Python
+      # has no matching wheels, pip falls back to building from source, and the
+      # build blows past Render's time limit and gets cancelled.
+      - key: PYTHON_VERSION
+        value: 3.12.10
