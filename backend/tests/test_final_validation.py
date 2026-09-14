@@ -62,7 +62,13 @@ def test_final_validation_full_workflow_every_artifact_and_real_issues():
         "mixed_data_types",           # "abc" in age, "1,500" in revenue
         "category_inconsistency",     # "Gold" vs "gold" casing variants
         "whitespace_formatting",      # padded name
-        "invalid_date",               # mixed date formats in signup_date
+        # "03/04/2024" in signup_date used to become NaN here: a naive whole-column
+        # pd.to_datetime() call infers one format from the mostly-ISO column and fails
+        # on the one slash-formatted value, silently destroying it (invalid_date).
+        # The hardened date_normalizer instead recognizes it as genuinely AMBIGUOUS
+        # (no column-wide DD/MM vs MM/DD evidence exists) and preserves it, flagging
+        # ambiguous_date for review instead of guessing or destroying it.
+        "ambiguous_date",
         "negative_value",             # negative quantity
     }
     assert expected_issue_types.issubset(customers_issues)

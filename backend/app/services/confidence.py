@@ -45,6 +45,11 @@ _CONFIDENCE_TABLE: dict[str, tuple[str, str, str]] = {
         "Remove duplicate row(s), keeping the first occurrence.",
         "Rows are 100% identical across every column; removing the extra copy is lossless.",
     ),
+    "currency_value": (
+        "HIGH",
+        "Strip currency symbols/codes and thousands separators; keep the numeric magnitude.",
+        "Value was confirmed to parse unambiguously as a single-currency numeric amount; only formatting is removed, the magnitude is preserved exactly.",
+    ),
     # MEDIUM -- apply with strong evidence, log it.
     "missing_value_placeholder": (
         "MEDIUM",
@@ -111,6 +116,26 @@ _CONFIDENCE_TABLE: dict[str, tuple[str, str, str]] = {
         "LOW",
         "Flag for manual review.",
         "This column is required by the project plan but is not present in the dataset; it cannot be auto-generated.",
+    ),
+    "invalid_email": (
+        "LOW",
+        "Flag for manual review.",
+        "An invalid email cannot be safely repaired without inventing a domain or local part; only the person who owns the data can correct it.",
+    ),
+    "currency_inconsistency": (
+        "LOW",
+        "Flag for manual review.",
+        "Column mixes multiple currencies; converting between them requires an exchange rate this system is never authorized to assume.",
+    ),
+    "near_duplicate": (
+        "LOW",
+        "Flag for manual review.",
+        "Records are similar but not identical; only a human can judge whether they represent the same real-world entity.",
+    ),
+    "ambiguous_date": (
+        "LOW",
+        "Flag for manual review.",
+        "Value could be read as either DD/MM or MM/DD and no column-wide convention could be established; guessing risks silently corrupting a valid date.",
     ),
 }
 

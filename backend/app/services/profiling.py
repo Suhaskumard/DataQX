@@ -17,6 +17,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from app.services import date_normalizer
+
 NEAR_CONSTANT_THRESHOLD = 0.95
 RARE_CATEGORY_THRESHOLD = 0.01
 TOP_CATEGORIES_LIMIT = 5
@@ -67,10 +69,18 @@ def infer_column_type(series: pd.Series, column_name: str) -> str:
     # Object/string column: try a date parse (only if it looks date-like, to avoid
     # accidentally parsing plain numeric-looking strings as dates).
     sample = non_null.astype(str).head(20)
-    date_like_pattern = re.compile(r"\d{4}-\d{1,2}-\d{1,2}|\d{1,2}/\d{1,2}/\d{2,4}")
+    _MONTH_NAMES = r"jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec"
+    date_like_pattern = re.compile(
+        r"\d{4}[-/.]\d{1,2}[-/.]\d{1,2}"
+        r"|\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}"
+        rf"|(?:{_MONTH_NAMES})[a-z]*\s+\d{{1,2}},?\s+\d{{4}}"
+        rf"|\d{{1,2}}\s+(?:{_MONTH_NAMES})[a-z]*,?\s+\d{{4}}",
+        re.IGNORECASE,
+    )
     if sample.map(lambda v: bool(date_like_pattern.search(v))).mean() > 0.5:
-        parsed = pd.to_datetime(non_null, errors="coerce")
-        if parsed.notna().mean() > 0.5:
+        results = date_normalizer.normalize_date_column(non_null)
+        recoverable = sum(1 for r in results if r.status in ("parsed", "ambiguous"))
+        if recoverable / len(results) > 0.5:
             return "date"
 
     unique_ratio = non_null.nunique() / len(non_null)
@@ -194,17 +204,45 @@ def _parse_dates_safely(series: pd.Series) -> pd.Series:
 
 
 def _profile_date(series: pd.Series) -> dict:
+    """Uses the layered date_normalizer (not a bare pd.to_datetime call) so a value
+    like "Jan 7 2026" or "08-01-2026" that pandas' default inference can't guess is
+    not counted as invalid merely because one parser failed. Ambiguous values (no
+    column-wide convention evidence) are tracked separately from genuinely invalid
+    ones -- neither is silently treated as the other."""
     non_null = series.dropna()
-    parsed = _parse_dates_safely(non_null)
-    invalid_count = int(parsed.isna().sum())
-    valid = parsed.dropna()
-    now = pd.Timestamp.now(tz=valid.dt.tz) if len(valid) and valid.dt.tz is not None else pd.Timestamp.now()
-    future_count = int((valid > now).sum()) if len(valid) else 0
+    if pd.api.types.is_datetime64_any_dtype(non_null):
+        # Already a real datetime dtype -- no string parsing ambiguity is possible.
+        parsed = _parse_dates_safely(non_null)
+        valid = parsed.dropna()
+        now = pd.Timestamp.now(tz=valid.dt.tz) if len(valid) and valid.dt.tz is not None else pd.Timestamp.now()
+        return {
+            "min": valid.min().isoformat() if len(valid) else None,
+            "max": valid.max().isoformat() if len(valid) else None,
+            "invalid_count": int(parsed.isna().sum()),
+            "future_count": int((valid > now).sum()) if len(valid) else 0,
+            "ambiguous_count": 0,
+        }
+
+    results = date_normalizer.normalize_date_column(non_null)
+    invalid_count = sum(1 for r in results if r.status == "invalid")
+    ambiguous_count = sum(1 for r in results if r.status == "ambiguous")
+    normalized = [r.normalized_value for r in results if r.status == "parsed"]
+
+    if normalized:
+        valid = pd.to_datetime(pd.Series(normalized), errors="coerce")
+        now = pd.Timestamp.now()
+        future_count = int((valid > now).sum())
+        min_val, max_val = valid.min().isoformat(), valid.max().isoformat()
+    else:
+        future_count = 0
+        min_val = max_val = None
+
     return {
-        "min": valid.min().isoformat() if len(valid) else None,
-        "max": valid.max().isoformat() if len(valid) else None,
+        "min": min_val,
+        "max": max_val,
         "invalid_count": invalid_count,
         "future_count": future_count,
+        "ambiguous_count": ambiguous_count,
     }
 
 

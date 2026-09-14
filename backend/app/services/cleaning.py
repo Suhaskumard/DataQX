@@ -15,6 +15,8 @@ from dataclasses import asdict, dataclass, field
 import pandas as pd
 
 from app.services.confidence import classify_issue
+from app.services.currency_normalizer import parse_currency_cell
+from app.services.date_normalizer import infer_column_convention, parse_date_cell
 from app.services.issue_detection import Issue, _is_placeholder
 
 EXAMPLE_LIMIT = 5
@@ -28,6 +30,7 @@ _CLEANING_ORDER = {
     "missing_value_placeholder": 3,
     "category_inconsistency": 4,
     "invalid_date": 5,
+    "currency_value": 6,
 }
 
 
@@ -130,15 +133,48 @@ def _clean_category_inconsistency(df: pd.DataFrame, issue: Issue) -> tuple[pd.Da
 
 
 def _clean_invalid_date(df: pd.DataFrame, issue: Issue) -> tuple[pd.DataFrame, list]:
+    """Uses the layered date_normalizer instead of a single bare pd.to_datetime call.
+    A value is only ever nulled here when date_normalizer classifies it as genuinely
+    INVALID (impossible calendar date or unrecognizable text) -- never merely because
+    pandas' own default format inference failed to guess it. Ambiguous values (no
+    column-wide convention evidence) are left completely untouched by this handler;
+    they surface as a separate `ambiguous_date` issue for manual review instead."""
     column = issue.column
     series = df[column]
-    parsed = pd.to_datetime(series, errors="coerce")
-    invalid_mask = parsed.isna() & series.notna()
-    changes = [
-        {"row_index": int(idx), "original_value": series.loc[idx], "new_value": None}
-        for idx in series[invalid_mask].index
-    ]
-    df.loc[invalid_mask, column] = pd.NA
+    non_null_strs = [str(v) for v in series.dropna().tolist()]
+    convention = infer_column_convention(non_null_strs)
+
+    changes = []
+    for idx, value in series.items():
+        if pd.isna(value):
+            continue
+        result = parse_date_cell(value, column_convention=convention)
+        if result.status == "invalid":
+            changes.append({"row_index": int(idx), "original_value": value, "new_value": None})
+            df.at[idx, column] = pd.NA
+        elif result.status == "parsed" and result.normalized_value != str(value).strip():
+            changes.append({"row_index": int(idx), "original_value": value, "new_value": result.normalized_value})
+            df.at[idx, column] = result.normalized_value
+        # "ambiguous" and already-normalized "parsed" values are left untouched here.
+    return df, changes
+
+
+def _clean_currency_value(df: pd.DataFrame, issue: Issue) -> tuple[pd.DataFrame, list]:
+    """Only ever applied to `currency_value` issues, which issue_detection.py already
+    restricts to values it confirmed parse at HIGH confidence -- so every value this
+    handler touches is safe to normalize. Never applied when the column also carries a
+    `currency_inconsistency` issue (that issue type is not in _HANDLERS at all)."""
+    column = issue.column
+    series = df[column]
+    changes = []
+    for idx, value in series.items():
+        if pd.isna(value):
+            continue
+        result = parse_currency_cell(value)
+        if result.confidence == "HIGH" and result.normalized_value is not None:
+            if str(value).strip() != str(result.normalized_value):
+                changes.append({"row_index": int(idx), "original_value": value, "new_value": result.normalized_value})
+                df.at[idx, column] = result.normalized_value
     return df, changes
 
 
@@ -149,6 +185,7 @@ _HANDLERS = {
     "missing_value_placeholder": _clean_missing_placeholder,
     "category_inconsistency": _clean_category_inconsistency,
     "invalid_date": _clean_invalid_date,
+    "currency_value": _clean_currency_value,
 }
 
 

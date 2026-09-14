@@ -1,0 +1,15 @@
+customer_id,name,email,phone,signup_date,rating,amount,quantity,notes
+00101,Suhas Kumar,suhas.kumar@gmail.com,9876543210,2026-01-08,5,4500,3,Baseline clean row
+00102,Priya Rao,priya.rao@example.com,9876500001,Jan 7 2026,4,"4,500",2,Month-name date + comma amount
+00103,Arjun Mehta,arjun.kumar@gmail,9876500002,13-01-2026,3,2499 INR,1,Invalid email + unambiguous DD/MM dash date
+00104,Kiran Shah,kiran@,9876500003,08-01-2026,1,INR 2499,4,Invalid email + ambiguous date resolved by column evidence
+00105,Gautham Iyer,gautham.gmail.com,9876500004,31/02/2026,0,"1,200.50",2,Invalid email + impossible calendar date + rating below range
+00106,Divya Nair,invalid-email,9876500005,99/99/2026,6,not available,5,Invalid email + unparseable date + rating above range
+00107,Rohan Verma,rohan.verma@example.com,9876500006,2026/01/08,five,free,-2,Non-numeric rating + non-numeric amount + negative quantity
+00108,Ananya Das,ananya.das@example.com,9876500007,,,,,Fully blank optional fields
+00109,Vikram Singh,vikram.singh@example.com,9876500008,2024-02-29,2,9999999,1,Leap year valid date + huge outlier amount
+00110,Meera Pillai,meera.pillai@example.com,9876500009,2025-02-29,3,-500,1,Invalid leap date (non-leap year) + negative amount
+00101,Suhas Kumar,suhas.kumar@gmail.com,9876543210,2026-01-08,5,4500,3,Baseline clean row
+00112,Suhas Kumarr,suhas.kumar@gmail.com,9876543210,2026-01-09,5,4600,3,"Near-duplicate of row 1 (typo'd name; same email/phone)"
+00113,Farah Khan,farah.khan@example.com,9876500010,7 Jan 2026,4,"2,000",2,Day-first month-name date
+00114,Farah Khan,farah.khan@example.com,9876500011,7 Jan 2026,4,"2,000",2,Near-duplicate of row 13 (different phone)

@@ -13,6 +13,9 @@ from dataclasses import asdict, dataclass, field
 
 import pandas as pd
 
+from app.services.currency_normalizer import detect_column_currency_inconsistency, parse_currency_cell
+from app.services.duplicate_detector import find_near_duplicates
+from app.services.email_validator import validate_email_cell
 from app.services.profiling import DatasetProfile, _WHITESPACE_ISSUE_RE
 
 PLACEHOLDER_TOKENS = {
@@ -26,6 +29,9 @@ _NUMERIC_LIKE_RE = re.compile(r"^-?\d+(\.\d+)?$")
 # ("2023-06-15") is unambiguously ISO Y-M-D, and treating the day as an "ambiguous
 # first component" there is a false positive, not a real formatting inconsistency.
 _AMBIGUOUS_DATE_TOKEN_RE = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{2}|\d{4})$")
+_EMAIL_COLUMN_NAME_RE = re.compile(r"email", re.IGNORECASE)
+_CURRENCY_COLUMN_NAME_RE = re.compile(r"amount|price|revenue|cost|salary|fee|amt|total|subtotal|tax", re.IGNORECASE)
+_CURRENCY_VALUE_HINT_RE = re.compile(r"[₹$€£]|INR|USD|EUR|GBP|,\d{3}", re.IGNORECASE)
 
 
 @dataclass
@@ -223,6 +229,20 @@ def _detect_date_issues(df: pd.DataFrame, profile: DatasetProfile) -> list[Issue
                     description=f"Column '{column}' has {extra['future_count']} date(s) in the future.",
                 )
             )
+        if extra.get("ambiguous_count"):
+            issues.append(
+                Issue(
+                    issue_type="ambiguous_date",
+                    column=column,
+                    severity="medium",
+                    affected_count=extra["ambiguous_count"],
+                    description=(
+                        f"Column '{column}' has {extra['ambiguous_count']} date value(s) that could be "
+                        "read as either DD/MM or MM/DD and no column-wide convention could be established "
+                        "-- preserved as-is, not guessed."
+                    ),
+                )
+            )
 
         # Ambiguous format: some slash-dates clearly aren't DD/MM (or MM/DD) because
         # the day-or-month position exceeds 12, others are ambiguous because both the
@@ -267,7 +287,7 @@ def _detect_date_issues(df: pd.DataFrame, profile: DatasetProfile) -> list[Issue
 _IMPOSSIBLE_VALUE_RULES = [
     (re.compile(r"age", re.IGNORECASE), 0, 120),
     (re.compile(r"percent|pct", re.IGNORECASE), 0, 100),
-    (re.compile(r"rating", re.IGNORECASE), 0, 5),
+    (re.compile(r"rating", re.IGNORECASE), 1, 5),
 ]
 
 
@@ -319,6 +339,79 @@ def _detect_impossible_values(df: pd.DataFrame) -> list[Issue]:
                         details={"examples": negative.head(5).tolist()},
                     )
                 )
+    return issues
+
+
+def _detect_email_issues(df: pd.DataFrame) -> list[Issue]:
+    issues = []
+    for column in df.columns:
+        if not _EMAIL_COLUMN_NAME_RE.search(str(column)):
+            continue
+        non_null = df[column].dropna().astype(str)
+        if non_null.empty:
+            continue
+        invalid = sorted({v for v in non_null if not validate_email_cell(v).is_valid})
+        if invalid:
+            affected = int(non_null.isin(invalid).sum())
+            issues.append(
+                Issue(
+                    issue_type="invalid_email",
+                    column=column,
+                    severity="high",
+                    affected_count=affected,
+                    description=f"Column '{column}' has {affected} malformed email address(es).",
+                    details={"examples": invalid[:5]},
+                )
+            )
+    return issues
+
+
+def _detect_currency_issues(df: pd.DataFrame) -> list[Issue]:
+    issues = []
+    for column in df.columns:
+        series = df[column]
+        if series.dtype != object:
+            continue
+        non_null = series.dropna().astype(str)
+        if non_null.empty:
+            continue
+
+        name_hint = bool(_CURRENCY_COLUMN_NAME_RE.search(str(column)))
+        value_hint_ratio = non_null.map(lambda v: bool(_CURRENCY_VALUE_HINT_RE.search(v))).mean()
+        if not (name_hint or value_hint_ratio > 0.2):
+            continue
+
+        unique_values = non_null.unique().tolist()
+        parsed_by_value = {v: parse_currency_cell(v) for v in unique_values}
+        formatted_values = [
+            v for v in unique_values
+            if parsed_by_value[v].confidence == "HIGH" and not _NUMERIC_LIKE_RE.match(v.strip())
+        ]
+        if formatted_values:
+            affected = int(non_null.isin(formatted_values).sum())
+            issues.append(
+                Issue(
+                    issue_type="currency_value",
+                    column=column,
+                    severity="low",
+                    affected_count=affected,
+                    description=f"Column '{column}' has {affected} currency/number-formatted value(s) that can be safely normalized (symbols, codes, and thousands separators removed).",
+                    details={"examples": formatted_values[:5]},
+                )
+            )
+
+        currencies = detect_column_currency_inconsistency(non_null.tolist())
+        if currencies:
+            issues.append(
+                Issue(
+                    issue_type="currency_inconsistency",
+                    column=column,
+                    severity="high",
+                    affected_count=len(non_null),
+                    description=f"Column '{column}' mixes multiple currencies ({', '.join(currencies)}); values are never converted between currencies automatically.",
+                    details={"currencies": currencies},
+                )
+            )
     return issues
 
 
@@ -409,4 +502,49 @@ def detect_issues(df: pd.DataFrame, profile: DatasetProfile) -> list[Issue]:
     issues += _detect_impossible_values(df)
     issues += _detect_outliers(profile)
     issues += _detect_schema_issues(profile)
+    issues += _detect_email_issues(df)
+    issues += _detect_currency_issues(df)
+    issues += _detect_near_duplicates(df, profile)
     return issues
+
+
+_NAME_COLUMN_RE = re.compile(r"name", re.IGNORECASE)
+_PHONE_COLUMN_RE = re.compile(r"phone|mobile|contact_number", re.IGNORECASE)
+
+
+def _detect_near_duplicates(df: pd.DataFrame, profile: DatasetProfile) -> list[Issue]:
+    """Level 3 near-duplicate detection (flag only -- never wired into auto-cleaning).
+    Uses blocking on email/phone to stay well clear of O(n^2) full comparison."""
+    email_col = next((c for c in df.columns if _EMAIL_COLUMN_NAME_RE.search(str(c))), None)
+    phone_col = next((c for c in df.columns if _PHONE_COLUMN_RE.search(str(c))), None)
+    name_col = next((c for c in df.columns if _NAME_COLUMN_RE.search(str(c))), None)
+    if not (email_col or phone_col) or not name_col:
+        return []
+
+    records = df.to_dict("records")
+    matches = find_near_duplicates(records, name_col=name_col, email_col=email_col, phone_col=phone_col)
+    if not matches:
+        return []
+
+    return [
+        Issue(
+            issue_type="near_duplicate",
+            column=None,
+            severity="medium",
+            affected_count=len(matches),
+            description=f"{len(matches)} pair(s) of records appear to be near-duplicates (similar but not identical); flagged for manual review, not auto-merged.",
+            details={
+                "matches": [
+                    {
+                        "row_indices": list(m.row_indices),
+                        "similarity": m.similarity,
+                        "matching_fields": m.matching_fields,
+                        "conflicting_fields": m.conflicting_fields,
+                        "confidence": m.confidence,
+                        "recommended_action": m.recommended_action,
+                    }
+                    for m in matches
+                ]
+            },
+        )
+    ]

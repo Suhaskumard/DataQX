@@ -125,14 +125,16 @@ def clean_run(request: CleanRequest) -> dict:
             file_lineage[file_path.name] = lineage_dicts
             all_lineage_rows.extend(lineage_dicts)
 
-            gate = evaluate_gate(cleaning_result.cleaned_df)
-
             # "After" side -- computed for both published and rolled-back files, since
             # even an unpublished attempt is useful diagnostic context for *why* it's
-            # still not good enough (mirrors the PDF report's "Remaining Issues").
+            # still not good enough (mirrors the PDF report's "Remaining Issues"). Also
+            # needed by the rollback gate itself, to catch a cleaning step that silently
+            # destroyed recoverable data (e.g. valid dates -> null) even when every
+            # other validation check still passes.
             cleaned_df = cleaning_result.cleaned_df
             after_profile = profile_dataset(cleaned_df)
             after_issues = detect_issues(cleaned_df, after_profile)
+            gate = evaluate_gate(cleaned_df, before_profile=profile, after_profile=after_profile)
             before_readiness = evaluate_analytics_readiness(ingestion_result.dataframe, profile, issues)
             after_readiness = evaluate_analytics_readiness(cleaned_df, after_profile, after_issues)
             file_analytics_readiness_after[file_path.name] = after_readiness.to_dict()

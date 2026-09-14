@@ -20,7 +20,7 @@ _STATUS_RANK = {"pass": 0, "warning": 1, "fail": 2}
 _IMPOSSIBLE_VALUE_RULES = [
     (re.compile(r"age", re.IGNORECASE), 0, 120),
     (re.compile(r"percent|pct", re.IGNORECASE), 0, 100),
-    (re.compile(r"rating", re.IGNORECASE), 0, 5),
+    (re.compile(r"rating", re.IGNORECASE), 1, 5),
 ]
 
 _TOLERANCE = 1e-6
