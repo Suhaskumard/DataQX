@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DataQX</title>
+    <!-- Without an explicit favicon, browsers auto-request /favicon.ico and log a
+         404 (some browsers, e.g. Edge, surface this as a console error) -- a small
+         inline SVG avoids that extra request entirely, no binary asset needed. -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234338ca'/%3E%3Ctext x='16' y='23' font-family='system-ui,sans-serif' font-size='18' font-weight='700' fill='white' text-anchor='middle'%3EQ%3C/text%3E%3C/svg%3E"
+    />
+
   </head>
   <body>
     <div id="root"></div>

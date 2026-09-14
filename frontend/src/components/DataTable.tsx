@@ -94,18 +94,31 @@ export default function DataTable({ columns, rows, emptyMessage = "No rows.", se
           <table className="min-w-full text-sm">
             <thead className="sticky top-0 z-10 bg-surface-raised">
               <tr>
-                {columns.map((col) => (
-                  <th
-                    key={col.key}
-                    onClick={() => toggleSort(col)}
-                    className={`px-3 py-2 text-left font-medium text-secondary border-b border-line whitespace-nowrap ${
-                      col.sortable ? "cursor-pointer select-none hover:text-primary" : ""
-                    }`}
-                  >
-                    {col.label}
-                    {col.sortable && sortKey === col.key && (sortDir === "asc" ? " ↑" : " ↓")}
-                  </th>
-                ))}
+                {columns.map((col) => {
+                  const isSorted = col.sortable && sortKey === col.key;
+                  const ariaSort = !col.sortable ? undefined : isSorted ? (sortDir === "asc" ? "ascending" : "descending") : "none";
+                  return (
+                    <th
+                      key={col.key}
+                      scope="col"
+                      aria-sort={ariaSort as any}
+                      className="px-3 py-2 text-left font-medium text-secondary border-b border-line whitespace-nowrap"
+                    >
+                      {col.sortable ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleSort(col)}
+                          className="flex items-center gap-1 select-none hover:text-primary focus:outline-none focus-visible:underline"
+                        >
+                          {col.label}
+                          {isSorted && <span aria-hidden="true">{sortDir === "asc" ? "↑" : "↓"}</span>}
+                        </button>
+                      ) : (
+                        col.label
+                      )}
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody className="divide-y divide-line">

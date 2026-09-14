@@ -33,6 +33,7 @@ DATA_DICTIONARY_COLUMNS = [
     "column_name",
     "original_name",
     "data_type",
+    "semantic_role",
     "description",
     "nullable",
     "unique_count",
@@ -59,12 +60,20 @@ def build_data_dictionary(
     lineage_entries: list[LineageEntry],
     cleaning_log: list[CleaningLogEntry],
     platform_field_roles: dict[str, dict[str, str]] | None = None,
+    semantic_roles: dict[str, str] | None = None,
 ) -> list[dict]:
     """`platform_field_roles` is `{platform_key: {column: role_label}}`, i.e. each
     platform result's own `field_roles` from `AnalyticsReadinessResult.platforms`
     -- optional so callers that haven't computed readiness yet still get a valid
-    dictionary with blank platform columns rather than an error."""
+    dictionary with blank platform columns rather than an error.
+
+    `semantic_roles` is `{original_name: human_label}` from
+    `app.services.semantic_roles.role_labels_by_column()` -- the one, real,
+    backend-computed universal role per column. There is no second heuristic
+    here; a column missing from this dict simply renders a blank role rather
+    than a guessed one."""
     platform_field_roles = platform_field_roles or {}
+    semantic_roles = semantic_roles or {}
     lineage_by_column: dict[str, list[LineageEntry]] = {}
     for entry in lineage_entries:
         lineage_by_column.setdefault(entry.source_column, []).append(entry)
@@ -87,6 +96,7 @@ def build_data_dictionary(
                 "column_name": col.clean_name,
                 "original_name": col.original_name,
                 "data_type": col.inferred_type,
+                "semantic_role": semantic_roles.get(col.original_name),
                 "description": _describe(col.inferred_type, col.missing_percentage),
                 "nullable": col.missing_count > 0,
                 "unique_count": col.unique_count,

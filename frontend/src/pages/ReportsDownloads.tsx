@@ -37,7 +37,13 @@ export default function ReportsDownloads() {
   const fileResult = filename ? run.cleanResult.files[filename] : undefined;
 
   if (!filename || !fileResult) {
-    return <EmptyRunState title="Reports & Downloads" />;
+    return (
+      <EmptyRunState
+        title="Reports & Downloads"
+        heading="Nothing to download yet"
+        description="Reports, logs and the analytics-ready dataset are generated once cleaning completes. Upload a dataset to produce your first set of downloadable outputs."
+      />
+    );
   }
 
   const stem = filename.replace(/\.[^.]+$/, "");

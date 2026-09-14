@@ -5,7 +5,7 @@ from app.services.data_dictionary import DATA_DICTIONARY_COLUMNS, build_data_dic
 from app.services.issue_detection import detect_issues
 from app.services.lineage import build_lineage
 from app.services.profiling import profile_dataset
-from app.services.semantic_roles import classify_columns
+from app.services.semantic_roles import classify_columns, role_labels_by_column
 
 
 def test_data_dictionary_fixed_column_has_cleaning_actions_and_lineage_id():
@@ -71,3 +71,31 @@ def test_data_dictionary_carries_real_platform_field_roles():
     id_row = next(r for r in dictionary if r["original_name"] == "customer_id")
     assert id_row["power_bi_role"] == "Key"
     assert id_row["sql_role"] == "Primary Key Candidate"
+
+
+def test_data_dictionary_semantic_role_matches_backend_classifier_exactly():
+    # Single source of truth: the dictionary's "semantic_role" must be exactly
+    # what app.services.semantic_roles.classify_columns() computed -- no second,
+    # independent guess (e.g. a frontend heuristic off data_type) is allowed to
+    # silently diverge from this real, already-computed classification.
+    df = pd.DataFrame(
+        {
+            "customer_id": range(1, 11),
+            "signup_date": [f"2024-01-{i:02d}" for i in range(1, 11)],
+            "revenue": [float(i) for i in range(10)],
+            "category": ["A", "B"] * 5,
+        }
+    )
+    profile = profile_dataset(df)
+    roles = classify_columns(profile)
+    expected_labels = role_labels_by_column(roles)
+
+    dictionary = build_data_dictionary(profile, [], [], semantic_roles=expected_labels)
+
+    for row in dictionary:
+        assert row["semantic_role"] == expected_labels.get(row["original_name"])
+
+    assert next(r for r in dictionary if r["original_name"] == "customer_id")["semantic_role"] == "Identifier"
+    assert next(r for r in dictionary if r["original_name"] == "signup_date")["semantic_role"] == "Date"
+    assert next(r for r in dictionary if r["original_name"] == "revenue")["semantic_role"] == "Measure"
+    assert next(r for r in dictionary if r["original_name"] == "category")["semantic_role"] == "Dimension"

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { useEffect } from "react";
 import ValidationPage from "../src/pages/ValidationPage";
@@ -42,6 +43,43 @@ describe("ValidationPage with a passing run", () => {
     expect(screen.getByText("sales.csv")).toBeInTheDocument();
     expect(screen.getByText("Dataset Validated")).toBeInTheDocument();
     expect(screen.getByText("schema_integrity")).toBeInTheDocument();
+  });
+});
+
+describe("ValidationPage keyboard accessibility (real keyboard interaction, not just click)", () => {
+  it("sorts the Check column via keyboard focus + Enter, not just mouse click", async () => {
+    const user = userEvent.setup();
+    renderWithRun({
+      runId: "run_test_val_kb",
+      validateResult: {
+        files: {
+          "sales.csv": {
+            overall_status: "pass",
+            checks: [
+              { check_name: "zeta_check", status: "pass", message: "z" },
+              { check_name: "alpha_check", status: "pass", message: "a" },
+            ],
+          },
+        },
+      },
+    } as any);
+
+    const checkHeaderButton = screen.getByRole("button", { name: "Check" });
+    const columnHeader = checkHeaderButton.closest("th")!;
+    expect(columnHeader).toHaveAttribute("aria-sort", "none");
+
+    checkHeaderButton.focus();
+    expect(checkHeaderButton).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(columnHeader).toHaveAttribute("aria-sort", "ascending");
+    const rowsAfterFirstSort = screen.getAllByRole("row").slice(1); // skip header row
+    expect(rowsAfterFirstSort[0]).toHaveTextContent("alpha_check");
+
+    await user.keyboard("{Enter}");
+    expect(columnHeader).toHaveAttribute("aria-sort", "descending");
+    const rowsAfterSecondSort = screen.getAllByRole("row").slice(1);
+    expect(rowsAfterSecondSort[0]).toHaveTextContent("zeta_check");
   });
 });
 

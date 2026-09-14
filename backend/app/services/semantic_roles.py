@@ -48,3 +48,18 @@ def classify_table_role(roles: list[ColumnRole]) -> str:
 
 def columns_with_role(roles: list[ColumnRole], role: str) -> list[str]:
     return [c.column for c in roles if c.role == role]
+
+
+# The one place a raw role key becomes a human label -- every consumer (the data
+# dictionary, and any future UI) reads through this instead of inventing its own
+# label text, so there is exactly one source of truth for what "primary_key" means.
+ROLE_LABELS: dict[str, str] = {
+    "primary_key": "Identifier",
+    "date_dimension": "Date",
+    "measure": "Measure",
+    "dimension_attribute": "Dimension",
+}
+
+
+def role_labels_by_column(roles: list[ColumnRole]) -> dict[str, str]:
+    return {r.column: ROLE_LABELS.get(r.role, r.role) for r in roles}

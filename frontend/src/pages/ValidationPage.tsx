@@ -15,7 +15,13 @@ export default function ValidationPage() {
   const fileResult = filename ? run.validateResult.files[filename] : undefined;
 
   if (!filename || !fileResult || typeof fileResult.overall_status !== "string") {
-    return <EmptyRunState title="Validation" />;
+    return (
+      <EmptyRunState
+        title="Validation"
+        heading="No validation results yet"
+        description="Run DataQX analysis and cleaning to generate schema, integrity and business-rule checks for this dataset."
+      />
+    );
   }
 
   const overallStatus: string = fileResult.overall_status;

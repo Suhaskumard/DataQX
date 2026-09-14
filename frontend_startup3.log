@@ -7,3 +7,39 @@
 
   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
 [2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+[2m1:40:16 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/AnalyticsReadinessPage.tsx, /src/index.css[22m
+[2m1:40:29 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/DataLineagePage.tsx, /src/index.css[22m
+[2m1:40:35 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/ReportsDownloads.tsx, /src/index.css[22m
+[2m1:40:40 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Upload.tsx, /src/index.css[22m
+[2m2:00:16 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/DataDictionaryPage.tsx, /src/index.css[22m
+[2m2:00:23 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/DataDictionaryPage.tsx, /src/index.css[22m
+[2m2:00:57 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/EmptyRunState.tsx, /src/index.css[22m
+[2m2:01:13 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/AnalyticsReadinessPage.tsx, /src/index.css[22m
+[2m2:01:25 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/BeforeAfter.tsx, /src/index.css[22m
+[2m2:01:36 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/CleaningActions.tsx, /src/index.css[22m
+[2m2:01:50 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/DataDriftPage.tsx, /src/index.css[22m
+[2m2:02:01 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/DatasetOverview.tsx, /src/index.css[22m
+[2m2:02:12 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/ReportsDownloads.tsx, /src/index.css[22m
+[2m2:02:23 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/ValidationPage.tsx, /src/index.css[22m
+[2m2:02:49 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/DataLineagePage.tsx, /src/index.css[22m
+[2m2:03:05 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/DataTable.tsx, /src/index.css[22m
+[2m2:03:22 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
+[2m2:03:34 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/Layout.tsx, /src/index.css[22m
+[2m2:03:48 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/BeforeAfter.tsx, /src/index.css, /src/pages/Dashboard.tsx[22m
+[2m2:04:06 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Dashboard.tsx, /src/index.css[22m
+[2m2:04:06 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/BeforeAfter.tsx, /src/index.css[22m
+[2m2:04:30 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/CleaningActions.tsx, /src/index.css[22m
+[2m2:04:41 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/CleaningActions.tsx, /src/index.css[22m
+[2m2:04:51 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/CleaningActions.tsx, /src/index.css[22m
+[2m2:05:13 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Upload.tsx, /src/index.css[22m
+[2m2:05:32 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/ErrorBoundary.tsx, /src/index.css[22m
+[2m2:05:43 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/NotFound.tsx, /src/index.css[22m
+[2m2:11:21 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/Sidebar.tsx, /src/index.css[22m
+[2m2:12:21 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/DataQuality.tsx, /src/index.css[22m
+[2m2:12:35 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Upload.tsx, /src/index.css[22m
+[2m2:12:51 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/BeforeAfter.tsx, /src/index.css, /src/pages/Dashboard.tsx[22m
+[2m2:13:00 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Dashboard.tsx, /src/index.css[22m
+[2m2:13:00 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/BeforeAfter.tsx, /src/index.css[22m
+[2m2:18:02 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mindex.html[22m
+[2m2:19:01 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/Layout.tsx, /src/index.css[22m
+[2m2:19:17 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Dashboard.tsx, /src/index.css[22m

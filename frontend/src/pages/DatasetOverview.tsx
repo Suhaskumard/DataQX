@@ -15,7 +15,13 @@ export default function DatasetOverview() {
   const profile = fileResult?.profile;
 
   if (!filename || !profile) {
-    return <EmptyRunState title="Dataset Overview" />;
+    return (
+      <EmptyRunState
+        title="Dataset Overview"
+        heading="No profile results yet"
+        description="Upload a dataset to see its real row/column counts, types and per-column statistics."
+      />
+    );
   }
 
   return (

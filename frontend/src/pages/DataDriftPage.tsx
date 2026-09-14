@@ -14,7 +14,13 @@ export default function DataDriftPage() {
   const drift = filename ? run.drift.files[filename] : undefined;
 
   if (!filename || !drift || typeof drift.overall_status !== "string") {
-    return <EmptyRunState title="Data Drift" />;
+    return (
+      <EmptyRunState
+        title="Data Drift"
+        heading="No drift results yet"
+        description="Drift compares this run's schema and distributions against a prior run of the same filename. Upload and analyze a dataset to start building drift history."
+      />
+    );
   }
 
   return (

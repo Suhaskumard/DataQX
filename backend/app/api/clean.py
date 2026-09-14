@@ -31,6 +31,7 @@ from app.services.profiling import profile_dataset
 from app.services.project_plan import load_project_plan
 from app.services.quality_score import compute_quality_score
 from app.services.rollback import evaluate_gate
+from app.services.semantic_roles import classify_columns, role_labels_by_column
 from app.services.run_metadata import (
     accumulate_processing_time,
     compute_file_hash,
@@ -159,8 +160,9 @@ def clean_run(request: CleanRequest) -> dict:
             platform_field_roles = {
                 name: platform_result.field_roles for name, platform_result in after_readiness.platforms.items()
             }
+            semantic_role_labels = role_labels_by_column(classify_columns(after_profile))
             dictionary_rows = build_data_dictionary(
-                after_profile, lineage_entries, cleaning_result.log, platform_field_roles
+                after_profile, lineage_entries, cleaning_result.log, platform_field_roles, semantic_role_labels
             )
             for row in dictionary_rows:
                 all_dictionary_rows.append({"dataset": file_path.name, **row})

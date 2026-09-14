@@ -26,7 +26,13 @@ export default function AnalyticsReadinessPage() {
   const readiness = filename ? run.analyticsReadiness.files[filename] : undefined;
 
   if (!filename || !readiness || typeof readiness.overall_score !== "number") {
-    return <EmptyRunState title="Analytics Readiness" />;
+    return (
+      <EmptyRunState
+        title="Analytics Readiness"
+        heading="No readiness results yet"
+        description="Analytics readiness is evaluated automatically during analysis. Upload and analyze a dataset to see how it scores across Power BI, Tableau, Excel and every other supported platform."
+      />
+    );
   }
 
   const platforms: Record<string, any> = readiness.platforms ?? {};

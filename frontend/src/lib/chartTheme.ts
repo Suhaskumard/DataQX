@@ -18,5 +18,15 @@ export function useChartColors() {
       fontSize: 12,
       color: isDark ? "#e8ecf5" : "#0f172a",
     },
+    // recharts' default tooltip only reads `contentStyle.color` on the outer
+    // wrapper div -- the "name"/"value" spans inside it render with their own
+    // (black, non-theme-aware) default color, which axe correctly flags as
+    // unreadable on a dark card. itemStyle/labelStyle theme those spans too.
+    tooltipItemStyle: { color: isDark ? "#e8ecf5" : "#0f172a" },
+    tooltipLabelStyle: { color: isDark ? "#e8ecf5" : "#0f172a" },
+    // The hover cursor recharts draws behind a bar defaults to a flat gray fill
+    // that reads as a jarring white/gray flash on a dark card -- a low-opacity
+    // themed tint keeps the hover affordance subtle in both themes.
+    cursorFill: isDark ? "rgba(148, 163, 184, 0.08)" : "rgba(100, 116, 139, 0.08)",
   };
 }

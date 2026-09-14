@@ -172,7 +172,7 @@ export default function Dashboard() {
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={chartColors.grid} />
                   <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: chartColors.axis }} />
                   <YAxis type="category" dataKey="severity" tick={{ fontSize: 11, fill: chartColors.axis }} width={60} />
-                  <Tooltip contentStyle={chartColors.tooltipStyle} />
+                  <Tooltip contentStyle={chartColors.tooltipStyle} itemStyle={chartColors.tooltipItemStyle} labelStyle={chartColors.tooltipLabelStyle} cursor={{ fill: chartColors.cursorFill }} />
                   <Bar dataKey="count" radius={[0, 4, 4, 0]}>
                     {severityData.map((d) => (
                       <Cell key={d.severity} fill={SEVERITY_COLOR[d.severity]} />
@@ -192,7 +192,7 @@ export default function Dashboard() {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartColors.grid} />
                   <XAxis dataKey="stage" tick={{ fontSize: 11, fill: chartColors.axis }} />
                   <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: chartColors.axis }} width={30} />
-                  <Tooltip contentStyle={chartColors.tooltipStyle} />
+                  <Tooltip contentStyle={chartColors.tooltipStyle} itemStyle={chartColors.tooltipItemStyle} labelStyle={chartColors.tooltipLabelStyle} cursor={{ fill: chartColors.cursorFill }} />
                   <Bar dataKey="score" fill="#4f46e5" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -223,7 +223,7 @@ export default function Dashboard() {
       )}
 
       {Object.keys(performanceTimes).length > 0 && (
-        <div className="rounded-lg border border-line bg-surface p-4 space-y-3">
+        <div data-testid="performance-section" className="rounded-lg border border-line bg-surface p-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs font-medium uppercase tracking-wide text-secondary">Performance</p>
             {bottleneckStage && (

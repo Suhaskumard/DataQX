@@ -16,14 +16,6 @@ const PLATFORM_ROLE_FIELDS: { key: string; label: string }[] = [
   { key: "r_role", label: "R" },
 ];
 
-function semanticRole(dataType: string): string {
-  if (dataType === "id") return "Identifier";
-  if (dataType === "integer" || dataType === "float") return "Measure";
-  if (dataType === "date" || dataType === "datetime") return "Date";
-  if (dataType === "boolean") return "Flag";
-  return "Dimension";
-}
-
 export default function DataDictionaryPage() {
   const { run } = useRun();
   const [search, setSearch] = useState("");
@@ -52,7 +44,13 @@ export default function DataDictionaryPage() {
   }
 
   if (!filename) {
-    return <EmptyRunState title="Data Dictionary" />;
+    return (
+      <EmptyRunState
+        title="Data Dictionary"
+        description="No data dictionary generated yet. Run cleaning to generate column-level definitions and platform roles."
+        actionLabel="Upload Dataset"
+      />
+    );
   }
 
   function toggleExpanded(key: string) {
@@ -74,14 +72,22 @@ export default function DataDictionaryPage() {
       <div className="flex flex-wrap gap-3">
         <div className="relative">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+          <label htmlFor="dictionary-search" className="sr-only">
+            Search columns
+          </label>
           <input
+            id="dictionary-search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search columns..."
             className="rounded-md border border-line bg-surface pl-8 pr-2 py-1.5 text-sm text-primary placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
+        <label htmlFor="dictionary-type-filter" className="sr-only">
+          Filter by type
+        </label>
         <select
+          id="dictionary-type-filter"
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
           className="rounded-md border border-line bg-surface text-sm px-2 py-1.5 text-primary"
@@ -93,7 +99,11 @@ export default function DataDictionaryPage() {
             </option>
           ))}
         </select>
+        <label htmlFor="dictionary-platform-filter" className="sr-only">
+          Filter by platform relevance
+        </label>
         <select
+          id="dictionary-platform-filter"
           value={platformFilter}
           onChange={(e) => setPlatformFilter(e.target.value)}
           className="rounded-md border border-line bg-surface text-sm px-2 py-1.5 text-primary"
@@ -116,7 +126,6 @@ export default function DataDictionaryPage() {
           <table className="min-w-full text-sm">
             <thead className="bg-surface-raised">
               <tr>
-                <th className="w-8 px-2 py-2 border-b border-line" />
                 <th className="px-3 py-2 text-left font-medium text-secondary border-b border-line">Column</th>
                 <th className="px-3 py-2 text-left font-medium text-secondary border-b border-line">Type</th>
                 <th className="px-3 py-2 text-left font-medium text-secondary border-b border-line">Semantic Role</th>
@@ -128,27 +137,36 @@ export default function DataDictionaryPage() {
               {filtered.map((row, idx) => {
                 const key = row.column_name ?? row.original_name ?? String(idx);
                 const isOpen = expanded.has(key);
+                const detailId = `dictionary-detail-${idx}`;
                 const roleEntries = PLATFORM_ROLE_FIELDS.filter((p) => row[p.key]);
                 return (
                   <Fragment key={key}>
-                    <tr
-                      onClick={() => toggleExpanded(key)}
-                      className="cursor-pointer hover:bg-surface-raised transition-colors"
-                    >
-                      <td className="px-2 py-2 text-muted">
-                        {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    <tr className="hover:bg-surface-raised transition-colors">
+                      <td className="px-3 py-2 align-top">
+                        <button
+                          type="button"
+                          onClick={() => toggleExpanded(key)}
+                          aria-expanded={isOpen}
+                          aria-controls={detailId}
+                          className="flex items-center gap-1.5 text-left font-medium text-primary hover:text-brand-600 dark:hover:text-brand-400 focus:outline-none focus-visible:underline"
+                        >
+                          {isOpen ? (
+                            <ChevronDown size={14} className="shrink-0 text-muted" />
+                          ) : (
+                            <ChevronRight size={14} className="shrink-0 text-muted" />
+                          )}
+                          {row.column_name}
+                        </button>
                       </td>
-                      <td className="px-3 py-2 text-primary font-medium align-top">{row.column_name}</td>
                       <td className="px-3 py-2 text-secondary align-top">{row.data_type}</td>
-                      <td className="px-3 py-2 text-secondary align-top">{semanticRole(row.data_type)}</td>
+                      <td className="px-3 py-2 text-secondary align-top">{row.semantic_role ?? "—"}</td>
                       <td className="px-3 py-2 text-secondary align-top">
                         {row.missing_percentage != null ? `${row.missing_percentage}%` : "—"}
                       </td>
                       <td className="px-3 py-2 text-secondary align-top">{row.unique_count ?? "—"}</td>
                     </tr>
                     {isOpen && (
-                      <tr className="bg-canvas/40">
-                        <td />
+                      <tr id={detailId} className="bg-canvas/40">
                         <td colSpan={5} className="px-3 py-3">
                           <p className="text-xs font-medium uppercase tracking-wide text-muted mb-2">Platform Roles</p>
                           {roleEntries.length === 0 ? (

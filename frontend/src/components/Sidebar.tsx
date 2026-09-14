@@ -5,7 +5,7 @@ export default function Sidebar() {
   return (
     <aside className="w-full sm:w-64 sm:shrink-0 border-b sm:border-b-0 sm:border-r border-line bg-surface flex flex-col">
       <div className="px-5 py-3 sm:py-5 border-b border-line">
-        <span className="text-lg font-bold tracking-tight text-brand-600 dark:text-brand-500">DataQX</span>
+        <span className="text-lg font-bold tracking-tight text-brand-600 dark:text-indigo-400">DataQX</span>
         <p className="text-xs text-secondary mt-0.5 hidden sm:block">Data Quality &amp; Analytics Readiness</p>
       </div>
       {/* Vertical, grouped list on sm+ screens; a horizontally-scrollable row of

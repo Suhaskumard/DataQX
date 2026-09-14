@@ -1,0 +1,7 @@
+customer_id,status,age,signup_date
+1,active,25,2023-01-15
+1,active,25,2023-01-15
+2,ACTIVE,,15/02/2023
+3,,-5,2023-13-45
+,inactive,999,not_a_date
+5,active,30,2023/03/10

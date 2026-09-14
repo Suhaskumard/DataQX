@@ -23,7 +23,10 @@ export default function DataLineagePage() {
 
       {entries.length === 0 ? (
         <div className="rounded-lg border border-dashed border-line-strong bg-surface p-6 text-center">
-          <p className="text-sm text-secondary">No lineage data available.</p>
+          <p className="text-sm font-medium text-secondary">No lineage data available.</p>
+          <p className="text-xs text-muted mt-1">
+            No columns were transformed during cleaning for this file, so there is nothing to trace.
+          </p>
         </div>
       ) : (
         <div className="space-y-2">

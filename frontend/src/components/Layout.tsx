@@ -38,7 +38,7 @@ export default function Layout() {
               ))}
             </nav>
             {run && filename ? (
-              <div className="flex items-center gap-3 min-w-0 md:border-l md:border-line md:pl-3">
+              <div data-testid="run-context" className="flex items-center gap-3 min-w-0 md:border-l md:border-line md:pl-3">
                 <span className="text-sm font-medium text-primary truncate">{filename}</span>
                 <span className="text-xs text-muted font-mono truncate hidden sm:inline">{run.runId}</span>
                 {cleanStatus && <Badge kind="status" value={cleanStatus} />}
@@ -51,7 +51,8 @@ export default function Layout() {
           </div>
           <button
             onClick={toggleTheme}
-            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label={theme === "dark" ? "Dark mode enabled. Switch to light mode" : "Light mode enabled. Switch to dark mode"}
+            aria-pressed={theme === "dark"}
             className="shrink-0 rounded-md p-2 text-secondary hover:bg-surface-raised hover:text-primary transition-colors"
           >
             {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}

@@ -40,7 +40,7 @@ export default function DataQuality() {
         <select
           value={severityFilter}
           onChange={(e) => setSeverityFilter(e.target.value)}
-          className="rounded-md border border-line-strong text-sm px-2 py-1"
+          className="rounded-md border border-line-strong bg-surface text-primary text-sm px-2 py-1"
         >
           <option value="all">All severities</option>
           {severities.map((s) => (
@@ -52,7 +52,7 @@ export default function DataQuality() {
         <select
           value={confidenceFilter}
           onChange={(e) => setConfidenceFilter(e.target.value)}
-          className="rounded-md border border-line-strong text-sm px-2 py-1"
+          className="rounded-md border border-line-strong bg-surface text-primary text-sm px-2 py-1"
         >
           <option value="all">All confidence levels</option>
           {confidences.map((c) => (

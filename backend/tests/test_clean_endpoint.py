@@ -104,8 +104,14 @@ def test_clean_endpoint_produces_correct_output_and_preserves_raw():
     assert dictionary_path.exists()
     dictionary = pd.read_csv(dictionary_path)
     assert "column_name" in dictionary.columns
+    assert "semantic_role" in dictionary.columns
     status_row = dictionary[dictionary["original_name"] == "status"].iloc[0]
     assert pd.notna(status_row["cleaning_actions"])
+    # "id" is numeric, unique, name-shaped like a key -> the real backend
+    # classifier (app.services.semantic_roles) must call it an Identifier, and
+    # that exact value must survive all the way into the on-disk CSV artifact.
+    id_row = dictionary[dictionary["original_name"] == "id"].iloc[0]
+    assert id_row["semantic_role"] == "Identifier"
 
 
 def test_analytics_readiness_endpoint_reflects_cleaned_data_after_clean_not_stale_raw_snapshot():

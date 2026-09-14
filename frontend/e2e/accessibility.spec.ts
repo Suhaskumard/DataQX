@@ -17,6 +17,15 @@ async function scanForSeriousViolations(page: import("@playwright/test").Page) {
   return serious;
 }
 
+// Sets the same localStorage key ThemeContext.tsx's getInitialTheme() reads,
+// before any page script runs -- toggling real rendered dark-mode CSS, not just
+// asserting a class name exists.
+async function setDarkMode(page: import("@playwright/test").Page) {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("dataqx-theme", "dark");
+  });
+}
+
 test.describe("Accessibility", () => {
   test("upload page has no serious/critical automated a11y violations", async ({ page }) => {
     await page.goto("/upload");
@@ -26,6 +35,26 @@ test.describe("Accessibility", () => {
 
   test("dashboard with a real analyzed run has no serious/critical automated a11y violations", async ({ page }) => {
     await page.goto("/upload");
+    await page.locator("#dataset-file-input").setInputFiles(SAMPLE_CSV);
+    await page.getByRole("button", { name: "Analyze Dataset" }).click();
+    await page.waitForURL("/", { timeout: 30_000 });
+
+    const violations = await scanForSeriousViolations(page);
+    expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
+  });
+
+  test("dark mode: upload page has no serious/critical automated a11y violations", async ({ page }) => {
+    await setDarkMode(page);
+    await page.goto("/upload");
+    await expect(page.locator("html")).toHaveClass(/dark/); // confirms dark mode actually rendered, not just requested
+    const violations = await scanForSeriousViolations(page);
+    expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
+  });
+
+  test("dark mode: dashboard with a real analyzed run has no serious/critical automated a11y violations", async ({ page }) => {
+    await setDarkMode(page);
+    await page.goto("/upload");
+    await expect(page.locator("html")).toHaveClass(/dark/);
     await page.locator("#dataset-file-input").setInputFiles(SAMPLE_CSV);
     await page.getByRole("button", { name: "Analyze Dataset" }).click();
     await page.waitForURL("/", { timeout: 30_000 });

@@ -59,7 +59,7 @@ describe("BeforeAfter with a failed before/after stage (Phase 25 fix)", () => {
 
     // Must NOT render "status"/"reason" as if they were real before/after metrics.
     expect(screen.queryByText("status")).not.toBeInTheDocument();
-    expect(screen.getByText("No dataset analyzed yet")).toBeInTheDocument();
+    expect(screen.getByText("No before/after comparison yet")).toBeInTheDocument();
   });
 });
 

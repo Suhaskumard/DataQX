@@ -12,6 +12,16 @@ const SAMPLE_CSV = path.join(__dirname, "fixtures", "sample.csv");
 // download. This is the one test in the suite that proves the shipped product works
 // end-to-end, not just that individual components render given mocked data.
 test("uploads a dataset and walks the full journey through every page", async ({ page }) => {
+  const consoleErrors: string[] = [];
+  page.on("console", (msg) => {
+    if (msg.type() === "error") consoleErrors.push(msg.text());
+  });
+  page.on("pageerror", (err) => consoleErrors.push(err.message));
+  page.on("requestfailed", (req) => consoleErrors.push(`requestfailed: ${req.url()} ${req.failure()?.errorText}`));
+  page.on("response", (res) => {
+    if (res.status() >= 400) consoleErrors.push(`http ${res.status()}: ${res.url()}`);
+  });
+
   await page.goto("/upload");
 
   await page.locator("#dataset-file-input").setInputFiles(SAMPLE_CSV);
@@ -27,7 +37,9 @@ test("uploads a dataset and walks the full journey through every page", async ({
     { label: "Dataset Overview", heading: "Dataset Overview" },
     { label: "Data Quality", heading: "Data Quality" },
     { label: "Cleaning Actions", heading: "Cleaning Actions" },
+    { label: "Validation", heading: "Validation" },
     { label: "Before vs After", heading: "Before vs After" },
+    { label: "Audit", heading: "Audit" },
     { label: "Data Lineage", heading: "Data Lineage" },
     { label: "Data Drift", heading: "Data Drift" },
     { label: "Analytics Readiness", heading: "Analytics Readiness" },
@@ -42,6 +54,18 @@ test("uploads a dataset and walks the full journey through every page", async ({
     await expect(page.getByText("No dataset analyzed yet")).toHaveCount(0);
   }
 
+  // Validation and Audit are new pages this session added real backend support
+  // for (GET /api/audit is new) -- reached here through the real Upload ->
+  // Analyze -> sidebar-click flow above, not a direct page.goto(), and asserted
+  // against actual content, not just their heading.
+  await page.getByRole("link", { name: "Validation", exact: true }).click();
+  await expect(page.getByText("row_integrity")).toBeVisible(); // a real validation check name, whatever the overall status turns out to be
+
+  await page.getByRole("link", { name: "Audit", exact: true }).click();
+  await expect(page.locator("table")).toBeVisible();
+  const auditRowCount = await page.locator("tbody tr").count();
+  expect(auditRowCount).toBeGreaterThan(0); // at least one real audit entry, not an empty table
+
   await page.getByRole("link", { name: "Reports & Downloads", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Reports & Downloads" })).toBeVisible();
 
@@ -52,4 +76,6 @@ test("uploads a dataset and walks the full journey through every page", async ({
   await page.getByRole("link", { name: "Download Cleaning Log" }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("cleaning_log.csv");
+
+  expect(consoleErrors, `Console errors during the full journey:\n${consoleErrors.join("\n")}`).toEqual([]);
 });

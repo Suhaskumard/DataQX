@@ -18,6 +18,7 @@ html, body, #root {
   --color-text-primary: 15 23 42;
   --color-text-secondary: 71 85 105;
   --color-text-muted: 100 116 139;
+  --color-focus: 79 70 229;
 }
 
 .dark {
@@ -29,9 +30,30 @@ html, body, #root {
   --color-text-primary: 232 236 245;
   --color-text-secondary: 170 180 200;
   --color-text-muted: 140 152 178;
+  /* brand-500 reads too close to the navy canvas -- a brighter indigo keeps the
+     keyboard focus ring clearly visible instead of relying on the browser default
+     outline, which has poor contrast against a dark background. */
+  --color-focus: 129 140 248;
 }
 
 body {
   background-color: rgb(var(--color-canvas));
   color: rgb(var(--color-text-primary));
+}
+
+/* One consistent, themed focus indicator everywhere instead of the browser
+   default outline (low-contrast on the dark navy canvas) -- :focus-visible only,
+   so mouse/touch interaction never shows a ring, matching normal expectations. */
+:focus-visible {
+  outline: 2px solid rgb(var(--color-focus));
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

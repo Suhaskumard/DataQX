@@ -35,8 +35,13 @@ export default class ErrorBoundary extends Component<Props, State> {
             <AlertOctagon className="mx-auto text-red-500" size={32} />
             <h1 className="text-xl font-semibold text-primary">Something went wrong</h1>
             <p className="text-sm text-secondary">
+              <span className="font-medium text-primary">Why: </span>
               This page hit an unexpected error, possibly because the backend returned a result this view didn't
               expect (for example, a stage that failed for one of your files). Your run data has not been lost.
+            </p>
+            <p className="text-sm text-secondary">
+              <span className="font-medium text-primary">What you can do: </span>
+              Go back to the Dashboard and try the action again.
             </p>
             <button
               onClick={() => {

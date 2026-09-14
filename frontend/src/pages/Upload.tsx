@@ -211,7 +211,7 @@ export default function Upload() {
             onChange={(e) => setProjectPlanText(e.target.value)}
             rows={4}
             placeholder="Describe your project objective, required columns, columns that must not be modified, etc."
-            className="block w-full rounded-md border border-line-strong text-sm p-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="block w-full rounded-md border border-line-strong bg-surface text-primary placeholder:text-muted text-sm p-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
 
@@ -236,8 +236,16 @@ export default function Upload() {
         </button>
 
         {error && (
-          <div className="rounded-md border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 p-3 text-sm text-red-700 dark:text-red-300">
-            {error}
+          <div className="rounded-md border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 p-3 text-sm text-red-700 dark:text-red-300 space-y-1">
+            <p className="font-medium">Unable to process this dataset.</p>
+            <p>
+              <span className="font-medium">Why: </span>
+              {error}
+            </p>
+            <p>
+              <span className="font-medium">What you can do: </span>
+              Check the file format and project plan, then try again.
+            </p>
           </div>
         )}
       </div>

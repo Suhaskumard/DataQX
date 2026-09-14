@@ -27,7 +27,13 @@ export default function BeforeAfter() {
     Object.values(summary).every((v) => v && typeof v === "object" && "before" in v && "after" in v);
 
   if (!filename || !isValidSummary) {
-    return <EmptyRunState title="Before vs After" />;
+    return (
+      <EmptyRunState
+        title="Before vs After"
+        heading="No before/after comparison yet"
+        description="This comparison is generated once cleaning completes. Upload a dataset and let DataQX clean it to see exactly what changed."
+      />
+    );
   }
 
   const rows = Object.entries(summary as Record<string, { before: number; after: number; change: number }>).map(
@@ -56,7 +62,7 @@ export default function BeforeAfter() {
               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={chartColors.grid} />
               <XAxis type="number" tick={{ fontSize: 11, fill: chartColors.axis }} />
               <YAxis type="category" dataKey="metric" tick={{ fontSize: 11, fill: chartColors.axis }} width={140} />
-              <Tooltip contentStyle={chartColors.tooltipStyle} />
+              <Tooltip contentStyle={chartColors.tooltipStyle} itemStyle={chartColors.tooltipItemStyle} labelStyle={chartColors.tooltipLabelStyle} cursor={{ fill: chartColors.cursorFill }} />
               <Legend wrapperStyle={{ fontSize: 11, color: chartColors.axis }} />
               <Bar dataKey="before" fill="#94a3b8" name="Before" radius={[0, 4, 4, 0]} />
               <Bar dataKey="after" fill="#4f46e5" name="After" radius={[0, 4, 4, 0]} />

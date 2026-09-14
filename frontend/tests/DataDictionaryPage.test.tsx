@@ -89,6 +89,24 @@ describe("DataDictionaryPage with an active run", () => {
     expect(screen.queryByText("revenue")).not.toBeInTheDocument();
   });
 
+  it("expands a row via real keyboard focus + Enter, exposing aria-expanded state", async () => {
+    const user = userEvent.setup();
+    renderWithRun(MOCK_RUN as any);
+
+    const expandButton = screen.getByRole("button", { name: /customer_id/ });
+    expect(expandButton).toHaveAttribute("aria-expanded", "false");
+
+    expandButton.focus();
+    expect(expandButton).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(expandButton).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Key")).toBeInTheDocument();
+
+    await user.keyboard(" ");
+    expect(expandButton).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("filters columns by search text", async () => {
     const user = userEvent.setup();
     renderWithRun(MOCK_RUN as any);
