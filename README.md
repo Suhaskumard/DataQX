@@ -1,247 +1,247 @@
-# DataQX — Intelligent Data Quality & Preparation Platform
+# DataQX
 
-DataQX is a stateless, project-aware Data Quality & Preparation Platform. It profiles,
-detects, cleans, validates, audits, tracks lineage, detects data drift, evaluates Power BI
-readiness, and generates professional analytics-ready datasets and reports from messy
-uploaded data — without ever writing to a database.
+## Intelligent data quality and analytics preparation
 
-Full specification: `DATAQX.pdf` (single source of truth for this project).
+DataQX is a stateless, project-aware data quality platform for turning messy business
+datasets into validated, analytics-ready outputs. It combines profiling, issue detection,
+confidence-based cleaning, validation, lineage, drift analysis, and Power BI readiness in
+one repeatable workflow.
 
-## Absolute Architecture Rules
+Upload a dataset, describe the intended use of the data, review the findings, and download
+the complete output package, including cleaned data, validation results, audit evidence,
+and a professional PDF report.
 
-- **No database of any kind** — no PostgreSQL, MySQL, MongoDB, SQLite, Supabase/Neon/Firebase
-  database, Redis-as-storage, or any SQL/NoSQL/cloud database.
-- **No ORM** — no SQLAlchemy, Prisma, Django ORM, MongoEngine, Tortoise, or any ORM layer.
-- **No database infrastructure** — no schemas, tables, migrations, connections, CRUD APIs,
-  models, repositories, or database-backed auth/sessions.
-- **No Docker** — no Docker, Docker Compose, Kubernetes, or containers. Runs directly on a
-  normal machine with Python + Node.js + npm.
-- **Stateless & file-based only** — all run artifacts (profiles, logs, lineage, drift
-  history, reports) are written to and read from the filesystem (`data/`, `reports/`,
-  `logs/`). Run identity flows through a `run_id`, not server-side session state.
-- **Original data protection** — raw uploads under `data/input/` are never overwritten.
-  Cleaned output goes to `data/output/`; scratch work goes to `data/temp/`.
+## Why DataQX
 
-## Technology Stack
+- **Project-aware cleaning**: business requirements and protected columns take priority over
+  generic transformation rules.
+- **Multi-format ingestion**: CSV, TSV, Excel, JSON, Parquet, Feather, and XML.
+- **Transparent decisions**: every detected issue and cleaning action can be reviewed through
+  audit logs, before/after comparisons, confidence levels, and lineage.
+- **Analytics readiness**: quality scoring, data dictionaries, referential-integrity checks,
+  drift detection, and Power BI-oriented validation.
+- **Safe processing**: source uploads are preserved; cleaned datasets and run artifacts are
+  written separately.
+- **Operationally simple**: no database, ORM, Docker, or external stateful service is
+  required.
 
-**Frontend:** React, Vite, TypeScript (where practical), Tailwind CSS, Recharts — deployed to Vercel.
+## Workflow
 
-**Backend:** Python, FastAPI, Pandas, NumPy, PyArrow, OpenPyXL, PyYAML, ReportLab, SciPy,
-scikit-learn (where useful) — deployed to Render.
-
-**Testing:** pytest (backend), Vitest or similar (frontend).
-
-## Project Directory
-
+```text
+Upload -> Analyze -> Profile -> Detect issues -> Clean -> Validate -> Report -> Download
 ```
-dataqx/
-├── backend/            FastAPI app (app/api, app/core, app/models, app/services, app/utils) + tests
-├── frontend/            React + Vite app (src/components, pages, services, hooks, types, utils) + tests
+
+Each run is identified by a `run_id`. The platform produces an isolated artifact set for
+that run, making results reproducible and easy to inspect.
+
+## Capabilities
+
+### Data quality
+
+- Dataset profiling and type inference
+- Missing-value, duplicate, mixed-type, outlier, format, and consistency detection
+- Numeric, text, category, date, identifier, and currency normalization
+- Confidence levels for automated recommendations and cleaning actions
+- Business-rule and referential-integrity validation
+- Validation gates with rollback protection
+
+### Governance and analytics
+
+- File-based audit and cleaning logs
+- Before/after comparisons
+- Data lineage and run metadata
+- Historical drift detection
+- Data dictionary and quality score
+- Power BI readiness analysis
+- Performance metrics and processing-time visibility
+- Downloadable CSV/JSON/Excel outputs and PDF reporting
+
+## Architecture
+
+DataQX is intentionally stateless and file-based:
+
+- **Frontend**: React, TypeScript, Vite, Tailwind CSS, Recharts, and Lucide icons.
+- **Backend**: Python, FastAPI, Pandas, NumPy, PyArrow, OpenPyXL, SciPy, scikit-learn,
+  PyYAML, and ReportLab.
+- **Storage model**: raw inputs, generated outputs, reports, and logs live on the filesystem
+  under `data/`, `reports/`, and `logs/`.
+- **API contract**: the frontend communicates with the backend over HTTP using the REST API.
+
+The architecture does not use a database, ORM, Docker, or database-backed sessions. Raw
+uploads under `data/input/` are never overwritten. Temporary processing data goes to
+`data/temp/`, and generated data goes to `data/output/`.
+
+## Repository layout
+
+```text
+DataQX/
+├── backend/              FastAPI application and backend tests
+│   ├── app/api/          API routers
+│   ├── app/core/         Configuration and logging
+│   ├── app/services/     Quality, cleaning, validation, and reporting engines
+│   └── app/utils/        Filesystem and shared utilities
+├── frontend/             React + Vite application and browser tests
 ├── data/
-│   ├── input/           Raw uploads — NEVER modified
-│   ├── output/          Cleaned/generated datasets
-│   ├── temp/             Ephemeral processing scratch space
-│   └── samples/         Sample/test datasets with known, intentional issues
-├── project/
-│   └── project_plan.md  User-provided project requirements (drives project-aware cleaning)
-├── reports/
-│   ├── runs/            Per-run artifact directories (file-based run metadata)
-│   └── history/         Historical profile snapshots (used for drift detection)
-├── logs/                 audit_log.csv, cleaning_log.csv, errors.log, performance.log
+│   ├── input/            Original uploads; never modified
+│   ├── output/           Cleaned and generated datasets
+│   ├── temp/             Ephemeral processing files
+│   └── samples/          Sample datasets for development and testing
+├── reports/              Per-run artifacts and drift history
+├── logs/                 Audit, cleaning, error, and performance logs
+├── project/              Project requirements and business rules
 ├── config/               Non-secret runtime configuration
-└── DATAQX.pdf            Full specification
+├── render.yaml           Render backend deployment definition
+└── DATAQX.txt            Product and architecture specification
 ```
 
-## Local Development
+## Quick start
 
-Requires only:
-- Python 3.12+
-- Node.js + npm
+### Prerequisites
 
-No Docker, no database server, no external services.
+- Python 3.12 or later
+- Node.js and npm
 
-**Backend** (from `backend/`):
-```
+### Start the backend
+
+From the repository root:
+
+```powershell
+cd backend
 python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
 .venv\Scripts\python -m uvicorn main:app --reload
 ```
-Runs at `http://localhost:8000`. Health check: `GET /health`.
 
-**Frontend** (from `frontend/`), in a second terminal:
-```
+The API is available at `http://localhost:8000`. The health endpoints are:
+
+- `GET http://localhost:8000/health`
+- `GET http://localhost:8000/api/health`
+
+### Start the frontend
+
+In a second terminal:
+
+```powershell
+cd frontend
 npm install
 npm run dev
 ```
-Runs at `http://localhost:5173` and talks to the backend at `http://localhost:8000`
-(CORS is already configured for this origin). Open it, go to **Upload Dataset**, choose
-a CSV/Excel/JSON/Parquet file, and click **Analyze Dataset** — this runs the real
-upload → analyze → clean → validate chain against the backend and lands on a live
-**Dashboard** populated entirely from real API responses.
 
-Run the test suites:
+Open `http://localhost:5173`, upload a CSV, Excel, JSON, or Parquet dataset, and start an
+analysis. The frontend uses the backend URL from `VITE_API_BASE_URL`.
+
+## Configuration
+
+Copy the example environment files before deploying or customizing an environment:
+
+```powershell
+Copy-Item backend\.env.example backend\.env
+Copy-Item frontend\.env.example frontend\.env
 ```
-cd backend && .venv\Scripts\python -m pytest
-cd frontend && npm run test
-cd frontend && npm run test:e2e   # real Playwright browser test against both live servers
+
+### Backend
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `DATAQX_CORS_ORIGINS` | Comma-separated allowed frontend origins | `http://localhost:5173,http://127.0.0.1:5173` |
+| `DATAQX_ENV` | Runtime environment label | `development` |
+| `DATAQX_MAX_UPLOAD_MB` | Maximum accepted upload size | `200` |
+
+### Frontend
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `VITE_API_BASE_URL` | Backend API base URL, without a trailing slash | `http://localhost:8000` |
+
+## API surface
+
+All application routes below are prefixed with `/api`.
+
+| Area | Endpoints |
+| --- | --- |
+| Health and ingestion | `GET /health`, `POST /upload` |
+| Analysis | `POST /analyze`, `GET /profile/{run_id}`, `GET /issues/{run_id}` |
+| Cleaning and validation | `POST /clean`, `POST /validate` |
+| Governance | `GET /audit/{run_id}`, `GET /lineage/{run_id}`, `GET /drift/{run_id}` |
+| Analytics | `GET /quality/{run_id}`, `GET /dictionary/{run_id}`, `GET /before-after/{run_id}`, `GET /analytics-readiness/{run_id}` |
+| Reporting | `GET /report/{run_id}`, `GET /download/{run_id}/{filename}`, `GET /performance/{run_id}` |
+
+FastAPI's interactive API documentation is available at `/docs` while the backend is
+running.
+
+## Project requirements
+
+For business-sensitive processing, complete `project/project_plan.md` before analysis, or
+provide the equivalent requirements through the frontend. A project plan can define:
+
+- Business questions, KPIs, and expected calculations
+- Required and protected columns
+- Expected date ranges and target variables
+- Business rules and referential requirements
+- Expected dashboards, visualizations, filters, and output formats
+
+These requirements guide the cleaning and validation stages so the result is fit for its
+intended analytical use.
+
+## Testing
+
+Run the backend unit and integration suite:
+
+```powershell
+cd backend
+.venv\Scripts\python -m pytest
 ```
+
+Run frontend tests and the browser journey:
+
+```powershell
+cd frontend
+npm run test
+npm run test:e2e
+```
+
+The end-to-end journey exercises the real frontend and backend together, including upload,
+analysis, dashboard views, and file download.
 
 ## Deployment
 
-DataQX deploys as two independent services — no database, no Docker, same architecture
-rules as local dev. The backend's filesystem writes (`data/`, `reports/`, `logs/`) work
-on Render's ephemeral disk since every run is self-contained under a `run_id`; artifacts
-just don't survive a redeploy/restart, matching the stateless design.
+DataQX deploys as two independent services:
 
-**Backend → Render** (`render.yaml` at the repo root defines this as a Blueprint):
-1. Create a new Web Service from this repo (or "New +" → "Blueprint" to pick up
-   `render.yaml` automatically).
-2. Root directory: `backend`. Build command: `pip install -r requirements.txt`. Start
-   command: `uvicorn main:app --host 0.0.0.0 --port $PORT`.
-3. Set `DATAQX_CORS_ORIGINS` to your Vercel frontend URL(s) (comma-separated if there's
-   more than one, e.g. a preview + production domain). See `backend/.env.example`.
-4. Health check path: `/health`.
+### Backend on Render
 
-**Frontend → Vercel:**
-1. Import this repo as a project; set root directory to `frontend`.
-2. Framework preset: Vite. Build command: `npm run build`. Output directory: `dist`.
-3. Set `VITE_API_BASE_URL` to your Render backend URL (e.g.
-   `https://dataqx-backend.onrender.com`, no trailing slash). See
-   `frontend/.env.example`.
-4. `frontend/vercel.json` rewrites all paths to `index.html` so React Router's
-   client-side routes (e.g. a hard refresh on `/dashboard`) resolve correctly.
+The root `render.yaml` defines the web service. It installs `backend/requirements.txt`,
+starts Uvicorn, and checks `/health`. Set `DATAQX_CORS_ORIGINS` to the production Vercel
+origin or origins.
 
-Deploy the backend first so you have its URL to give the frontend; a code change to
-either service redeploys independently of the other.
+### Frontend on Vercel
 
-## Development Status
+Create a Vercel project with `frontend` as the root directory. Use the Vite preset, run
+`npm run build`, and set `VITE_API_BASE_URL` to the deployed Render backend URL.
 
-Implemented in phases, verified end-to-end before moving forward (see `DATAQX.pdf` §64–66
-for the mandated PLAN → IMPLEMENT → TEST → VERIFY workflow).
+Deploy the backend first so its URL is available to the frontend configuration.
 
-- [x] Phase 0 — Environment & Architecture
-- [x] Phase 1 — FastAPI Foundation (health endpoint, config, logging, filesystem utils)
-- [x] Phase 2 — React Foundation (routing, layout, dashboard shell)
-- [x] Phase 3 — Upload System
-- [x] Phase 4 — Multi-Format Ingestion (CSV/TSV/Excel/JSON/Parquet/Feather/XML)
-- [x] Phase 5 — Dataset Profiling
-- [x] Phase 6 — Issue Detection
-- [x] Phase 7 — Confidence Engine (HIGH/MEDIUM/LOW)
-- [x] Phase 8 — Cleaning Engine
-- [x] Phase 9 — Audit Logging (file-based, `logs/audit_log.csv`/`cleaning_log.csv`)
-- [x] Phase 10 — Data Lineage
-- [x] Phase 11 — Validation Engine
-- [x] Phase 12 — Validation Gates & Rollback
-- [x] Phase 13 — Project Plan Integration
-- [x] Phase 14 — File-Based Run Metadata
-- [x] Phase 15 — Data Drift
-- [x] Phase 16 — Power BI Validation
-- [x] Phase 17 — Data Dictionary & Summaries (Quality Score, Before/After)
-- [x] Phase 18 — PDF Reporting (`DataQX_Report.pdf`)
-- [x] Phase 19 — Dashboard Integration: Upload + Dashboard pages wired to real
-      backend results, no hardcoded metrics.
-- [x] Phase 20 — Lineage / Drift / Power BI UI: before/after, data dictionary, and
-      download endpoints wired to the remaining sidebar pages.
-- [x] Phase 21 — Performance: performance logging (`performance_log.csv`), pipeline
-      result caching, processing-time surfaced in the frontend.
-- [x] **Phase 22 — Security & Error Handling**: friendly `IngestionError` reasons for
-      corrupt Excel/Parquet/Feather files, a global unhandled-exception safety net
-      (`main.py`) that guarantees no raw stack trace ever reaches a client, basic
-      hardening response headers, and a dedicated `test_security.py` /
-      `test_malformed_inputs.py` suite covering path traversal, unsafe filenames,
-      extension spoofing, and corrupt/malformed dataset files.
-- [x] **Phase 23 — Full Testing**: a full-chain backend pipeline test
-      (`test_full_pipeline_e2e.py`, upload→analyze→clean→validate→lineage→drift→
-      Power BI→dictionary→before/after→quality→report→download→performance in one
-      run), `pytest-cov` coverage reporting (270 backend tests, 96% coverage),
-      stress/concurrency tests (`test_performance_stress.py`, a 100k-row run and two
-      interleaved runs proving per-run artifact isolation), and a real Playwright
-      browser E2E test (`frontend/e2e/full-journey.spec.ts`) driving the actual dev
-      servers through the full user journey — upload, every sidebar page, and a real
-      file download.
-- [x] **Phase 24 — Final End-to-End Validation**: added realistic messy sample
-      datasets (`data/samples/customers.csv` + `orders.csv`, covering every S61 issue
-      type plus a real orphan foreign key for referential-integrity checking); fixed
-      `audit_log.csv` to also write per-run (previously global-only, so it couldn't be
-      downloaded per run); completed the Download Center with Audit Log / Drift
-      Report / Validation Report links (all 9 of S69's required downloads now
-      present); and added `test_final_validation.py`, which drives the real sample
-      datasets through the complete workflow and confirms every S67 artifact exists,
-      is non-empty, and is downloadable through the real API.
-- [x] **Phase 25 — Deployment Readiness**: backend CORS origins and frontend API base
-      URL are now environment-driven (`DATAQX_CORS_ORIGINS`, `VITE_API_BASE_URL`) instead
-      of hardcoded to `localhost`, so the same code runs locally and in production; added
-      `render.yaml` (backend web service, `/health` check, `uvicorn main:app --host 0.0.0.0
-      --port $PORT`) and `frontend/vercel.json` (SPA rewrite so client-side routes survive
-      a hard refresh); added `.env.example` files for both apps documenting every runtime
-      variable. *(current — final phase)*
+### Filesystem persistence
 
-## Final QA Checklist
+The application is designed for stateless runs. Deployment environments with ephemeral
+filesystems may remove generated artifacts after a restart or redeploy; download or export
+run outputs when they need to be retained externally.
 
-Reproduced from `DATAQX.pdf` §70 and checked off only against real, currently-passing
-evidence — not asserted from code existence alone (§63).
+## Security and operational behavior
 
-**Architecture (verified by `grep`-confirmed absence across `backend/`, and
-`requirements.txt` containing no database/ORM package):**
-- [x] No database / No PostgreSQL / No MySQL / No MongoDB / No SQLite / No Supabase
-      database / No Neon database / No SQLAlchemy / No ORM / No database migrations /
-      No database connections / No database CRUD / No persistent database storage /
-      No database-backed run history, audit logs, lineage, or drift history
-- [x] No Docker (no `Dockerfile`/`docker-compose.yml` anywhere in the repo)
+- Unsafe filenames, path traversal, extension spoofing, and malformed files are rejected or
+  handled with user-facing errors.
+- Raw exception traces are not returned to clients.
+- Basic response hardening headers are applied by the backend.
+- Upload size is bounded by `DATAQX_MAX_UPLOAD_MB`.
+- No application data is stored in a database.
 
-**Platform:**
-- [x] Windows local execution works — every command in this README was run on
-      Windows to produce the numbers below
-- [x] Frontend works / Backend works / Frontend connects to backend — verified by
-      `frontend/e2e/full-journey.spec.ts` driving both real servers together
+## Project status
 
-**Ingestion & formats** (`test_ingestion.py`, `test_upload.py`, `test_malformed_inputs.py`):
-- [x] Upload works / Project plan works / CSV works / TSV works / Excel works /
-      JSON works / Parquet works
+The core platform workflow is implemented and covered by backend, frontend, integration,
+stress, security, and browser end-to-end tests. The repository is suitable for local
+development and the documented Render/Vercel deployment model.
 
-**Core engine** (`test_profiling.py`, `test_issue_detection.py`, `test_cleaning.py`,
-`test_confidence.py`, `test_validation.py`, `test_final_validation.py`):
-- [x] Profiling works / Missing detection works / Duplicate detection works / Type
-      detection works / Numeric cleaning works / Text cleaning works / Category
-      handling works / Date validation works / Business rules work / ID validation
-      works / Referential integrity works (real orphan FK caught in
-      `test_final_validation.py`) / Confidence framework works
+## License
 
-Outlier detection is implemented (`app/services/issue_detection.py::_detect_outliers`)
-and unit-tested in `test_issue_detection.py`, though the Phase 24 sample dataset
-happens to route its one extreme value through the `mixed_data_types` check instead
-(the age column also contains a non-numeric value, so it's profiled as mixed rather
-than purely numeric) — a real, observed detector-precedence detail, not a gap.
-
-**Governance & reporting** (`test_lineage.py`, `test_audit_logging.py`,
-`test_run_metadata.py`, `test_drift.py`, `test_rollback.py`, `test_powerbi.py`,
-`test_quality_score.py`, `test_data_dictionary.py`, `test_pdf_report.py`,
-`test_performance_logging.py`, `test_final_validation.py`):
-- [x] Data lineage works / File-based audit logs work / File-based run metadata
-      works / File-based drift detection works / Validation gates work / Rollback
-      works / Project-specific rules work / Power BI validation works / Quality
-      scoring works / Data dictionary works / PDF report works / Performance
-      monitoring works
-
-**Scale, safety, and process** (`test_performance_stress.py`, `test_security.py`,
-`test_malformed_inputs.py`):
-- [x] Large dataset handling works (100k-row run in `test_performance_stress.py`) /
-      Error handling works / Security basics work
-- [x] Automated tests pass — **271 backend tests, 96% coverage** (`pytest --cov=app`)
-      and **34 frontend Vitest tests**, all passing as of this phase
-- [x] Regression tests pass — full suite re-run clean after every phase's changes
-- [x] End-to-end test passes — `test_full_pipeline_e2e.py`,
-      `test_final_validation.py`, and `frontend/e2e/full-journey.spec.ts` (real
-      Playwright browser against both live servers)
-- [x] README complete
-
-## Definition of Done
-
-Per `DATAQX.pdf` §71, the full real workflow — Upload → Project Plan → Analyze →
-Clean → Validate → Lineage → Drift → Power BI → Quality Score → Dashboard →
-Reports/Logs/PDF → Download — has been run end-to-end against realistic messy data
-(`data/samples/customers.csv` + `orders.csv`) and every artifact verified to exist on
-disk and be downloadable through the real API (see `test_final_validation.py`).
-Everything above is based on actual execution: 271 backend tests passing at 96%
-coverage, 34 frontend tests passing, and one real-browser Playwright test walking the
-complete user journey against the live backend and frontend — no fabricated results.
+No open-source license is currently specified for this repository. Contact the project
+maintainers before redistributing or using DataQX outside its intended environment.
